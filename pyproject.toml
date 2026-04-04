@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lap-counter"
+version = "0.1.0"
+description = "Listen to Wiclax passing events and drive a Microgate display board."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Tommaso Bertola", email = "bertola.tommaso@hotmail.it" }
+]
+keywords = ["wiclax", "microgate", "timing", "display", "tcp"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Developers",
+  "Topic :: Communications",
+  "Topic :: Utilities"
+]
+dependencies = []
+
+[project.scripts]
+lap-counter = "listen:main"
+
+[project.urls]
+Homepage = "https://github.com/tommasobertola/lap-counter"
+Repository = "https://github.com/tommasobertola/lap-counter"
+
+[tool.setuptools]
+py-modules = ["listen"]
+packages = ["display", "network", "parsing", "storage"]
+
+[tool.setuptools.package-data]
+display = ["*.json"]

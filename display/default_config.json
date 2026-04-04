@@ -1,0 +1,42 @@
+{
+  "network": {
+    "host": "192.168.1.12",
+    "port": 1234
+  },
+  "display": {
+    "ip": "192.168.1.12",
+    "port": 21967,
+    "settings": {
+      "reset_before_send": false,
+      "close_threshold_seconds": 5.0,
+      "rotation_interval_seconds": 2.0,
+      "min_display_time_seconds": 10.0
+    }
+  },
+  "inRace_settings": {
+    "save_to_disk": false,
+    "process_for_display": false
+  },
+  "passing_settings": {
+    "save_to_disk": true,
+    "process_for_display": true
+  },
+  "passing": [
+    {
+      "row": "A",
+      "col": 0,
+      "field": "bib",
+      "transforms": [
+        "pad_bib_space"
+      ]
+    },
+    {
+      "row": "A",
+      "col": 5,
+      "field": "msg",
+      "transforms": [
+        "do_not_transform"
+      ]
+    }
+  ]
+}

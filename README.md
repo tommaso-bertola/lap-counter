@@ -20,6 +20,53 @@ There is no need to interact with the utility directly, as it will automatically
 
 Some diagnostic logs are printed to the console for debugging purposes, but they can be ignored during normal operation.
 
+## Installation
+
+### From git via pip
+
+`pip install git+https://github.com/tommaso-bertola/lap-counter.git@main`
+
+Upgrade when new versions are released:
+`pip install --upgrade git+https://github.com/tommaso-bertola/lap-counter.git@main`
+
+### Run from source
+
+From the project root:
+
+`python listen.py`
+
+### Install as a package
+
+From the project root:
+
+`pip install .`
+
+Then run:
+
+`lap-counter`
+
+## Configuration file location and priority
+
+The app now supports packaged execution with a user-writable config file.
+
+At startup, configuration is resolved in this order:
+
+1. `LAP_COUNTER_CONFIG` environment variable (absolute path recommended)
+2. local `config.json` in the current working directory
+3. OS user config path (auto-created from packaged defaults if missing)
+
+### macOS path
+
+When installed as a package on macOS, edit this file:
+
+`~/Library/Application Support/lap-counter/config.json`
+
+If it does not exist, the app creates it automatically on first run using the bundled default configuration.
+
+### Example override
+
+`LAP_COUNTER_CONFIG=/absolute/path/to/config.json lap-counter`
+
 ## Usage task list
 
  1. Open Wiclax and create the additional fields required to send the info to the utility.
@@ -40,7 +87,7 @@ Some diagnostic logs are printed to the console for debugging purposes, but they
  Usually, the port is `29672` for the Microtab Led Display, but remember to check.
  5. Edit the `config.json` file to set the right IP address and port for the Microgate display and the Wiclax server connection settings.
  6. Edit the `config.json` changing the `display.settings` parameters to your needs.
- 7. Launch the utility and enjoy the show! `python listen.py`
+ 7. Launch the utility and enjoy the show! `python listen.py` (or `lap-counter` if installed as a package)
 
 
 As you can see in `config.json`, it is possible to customize the display settings, such as the position of the text and some basic transforms to the text (e.g. uppercase, lowercase, ...). The utility will apply the transforms to the text before sending it to the display.

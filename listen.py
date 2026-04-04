@@ -3,6 +3,8 @@ import pprint
 import subprocess
 import logging
 import platform
+from pathlib import Path
+from importlib import resources
 from network.client import TCPClient
 from parsing.json_stream import JSONStreamParser
 from storage.disk import MessageStore
@@ -15,6 +17,47 @@ DEFAULT_HOST = "192.168.1.12"
 DEFAULT_PORT = 1234
 DEFAULT_DISPLAY_IP = "192.168.1.12"
 DEFAULT_DISPLAY_PORT = 4422
+
+
+def _default_user_config_path() -> Path:
+    system = platform.system()
+    if system == "Darwin":
+        base_dir = Path.home() / "Library" / "Application Support"
+    elif system == "Windows":
+        base_dir = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
+    else:
+        base_dir = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    return base_dir / "lap-counter" / "config.json"
+
+
+def _bootstrap_user_config(target_path: Path) -> bool:
+    try:
+        default_content = resources.files("display").joinpath("default_config.json").read_text(encoding="utf-8")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(default_content, encoding="utf-8")
+        return True
+    except Exception as e:
+        logging.error(f"Could not create default config at {target_path}: {e}")
+        return False
+
+
+def resolve_config_path() -> str:
+    env_path = os.environ.get("LAP_COUNTER_CONFIG")
+    if env_path:
+        return env_path
+
+    local_path = Path("config.json")
+    if local_path.exists():
+        return str(local_path)
+
+    user_path = _default_user_config_path()
+    if not user_path.exists() and _bootstrap_user_config(user_path):
+        logging.info(f"Created default config at {user_path}")
+
+    if user_path.exists():
+        return str(user_path)
+
+    return "config.json"
 
 def setup_logging():
     logging.basicConfig(
@@ -39,7 +82,7 @@ def main():
     setup_logging()
     
     # Initialize components
-    config_handler = DisplayConfigHandler(config_path="config.json")
+    config_handler = DisplayConfigHandler(config_path=resolve_config_path())
     
     # Get configuration with environment variable overrides
     net_cfg = config_handler.network_config

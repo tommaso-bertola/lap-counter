@@ -7,6 +7,7 @@ class DisplayConfigHandler:
     Handles display board configuration and data transformation.
     """
     def __init__(self, config_path: str):
+        logging.info(f"Initializing DisplayConfigHandler with config path: {config_path}")
         self.config_path = config_path
         self.config = self._load_config()
 
