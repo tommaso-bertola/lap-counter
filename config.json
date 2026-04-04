@@ -1,0 +1,39 @@
+{
+  "network": {
+    "host": "192.168.1.12",
+    "port": 1234
+  },
+  "display": {
+    "ip": "192.168.1.12",
+    "port": 4422,
+    "settings": {
+      "reset_before_send": false
+    }
+  },
+  "inRace_settings": {
+    "save_to_disk": false,
+    "process_for_display": false
+  },
+  "passing_settings": {
+    "save_to_disk": true,
+    "process_for_display": true
+  },
+  "passing": [
+    {
+      "row": "A",
+      "col": 0,
+      "field": "bib",
+      "transforms": [
+        "do_not_transform"
+      ]
+    },
+    {
+      "row": "A",
+      "col": 4,
+      "field": "msg",
+      "transforms": [
+        "do_not_transform"
+      ]
+    }
+  ]
+}
