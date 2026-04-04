@@ -29,6 +29,11 @@ Some diagnostic logs are printed to the console for debugging purposes, but they
 Upgrade when new versions are released:
 `pip install --upgrade git+https://github.com/tommaso-bertola/lap-counter.git@main`
 
+To run the utility after installing via pip, simply run:
+`lap-counter`
+
+> Note: add the `config.json` file to the current working directory or set the `LAP_COUNTER_CONFIG` environment variable to the absolute path of the config file if you want to use a custom configuration. Otherwise, the utility will look for a user config file in the OS user config path and create it from the bundled default if it does not exist.
+
 ### Run from source
 
 From the project root:
@@ -80,7 +85,7 @@ If it does not exist, the app creates it automatically on first run using the bu
     1. Set with the following parameters, while leave all the other parameters to their default values:
         - `Tipo`: `TCP Server`
         - `Target endpoint`: `0.0.0.0`
-        - `Port`: `4242` (or any other port, but make sure to update the `config.json` file accordingly)
+        - `Port`: `1234` (or any other port, but make sure to update the `config.json` file accordingly)
         - `Format`: `Default JSON`
         - `Information`: `Passaggi recenti`
  4. Make sure the display board is correctly connected to the LAN with known IP address and port, and update the `config.json` file accordingly.
