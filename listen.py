@@ -2,11 +2,13 @@ import os
 import pprint
 import subprocess
 import logging
+import platform
 from network.client import TCPClient
 from parsing.json_stream import JSONStreamParser
 from storage.disk import MessageStore
 from display.board import DisplayBoard
 from display.config_handler import DisplayConfigHandler
+from display.manager import DisplayManager
 
 # Connection defaults
 DEFAULT_HOST = "192.168.1.12"
@@ -24,8 +26,12 @@ def setup_logging():
 def play_sound():
     """Play a short 'bit' sound when data is received and parsed."""
     try:
-        subprocess.Popen(['afplay', '/System/Library/Sounds/Bottle.aiff'], 
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if platform.system() == "Darwin":  # macOS
+            subprocess.Popen(['afplay', '/System/Library/Sounds/Purr.aiff'], 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif platform.system() == "Windows":
+            import winsound
+            winsound.Beep(1000, 100)  # Frequency: 1000Hz, Duration: 100ms
     except Exception:
         pass
 
@@ -48,6 +54,7 @@ def main():
     parser = JSONStreamParser()
     store = MessageStore(directory="output")
     display_board = DisplayBoard(ip=DISPLAY_IP, port=DISPLAY_PORT)
+    display_manager = DisplayManager(display_board, config=disp_cfg.get("settings", {}))
 
     try:
         # Connect to the data source
@@ -69,13 +76,13 @@ def main():
                             logging.info(f">>> {data_type.upper()} DETECTED <<<")
                         
                         should_reset = config_handler.reset_before_send
-                        for action in display_actions:
-                            try:
-                                if not is_in_race:
-                                    logging.info(f"Sending to Display: {action['text']} (Row: {action['row']}, Col: {action['col']}, Reset: {should_reset})")
-                                display_board.send_text(action['text'], row=action['row'], col=action['col'], reset=should_reset)
-                            except Exception as e:
-                                logging.error(f"Failed to update display board: {e}")
+                        if not is_in_race:
+                            for action in display_actions:
+                                logging.info(f"Queueing to DisplayManager: {action['text']} (Row: {action['row']}, Col: {action['col']}, Reset: {should_reset})")
+                        try:
+                            display_manager.show_message(display_actions, should_reset)
+                        except Exception as e:
+                            logging.error(f"Failed to queue message to DisplayManager: {e}")
                     elif data_type != "passing" and not is_in_race:
                         logging.info("Received data (no display rules applied):")
                         pprint.pprint(obj)
@@ -93,6 +100,9 @@ def main():
         logging.info("\nMain listener stopped by user.")
     except Exception as e:
         logging.error(f"Major error in main loop: {e}")
+    finally:
+        if 'display_manager' in locals():
+            display_manager.stop()
 
 if __name__ == "__main__":
     main()

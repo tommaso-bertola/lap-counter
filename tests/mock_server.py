@@ -18,11 +18,11 @@ def start_mock_server(host='127.0.0.1', port=1234):
             with conn:
                 logging.info(f"Connected by {addr}")
                 
-                # Sample payloads
+                # Sample payloads: sending athletes closely together (e.g. all within 1-2 seconds)
                 payloads = [
-                    {"dataType": "passing", "bib": "101", "brutetime": "12:34:56.789", "Mod": "1", "Entra": "1"},
-                    {"dataType": "heartbeat", "status": "ok"},
-                    {"dataType": "passing", "bib": "202", "brutetime": "12:35:10.123", "Mod": "1", "Entra": "1"}
+                    {"dataType": "passing", "bib": "101", "brutetime": "12:34:56.789", "Mod": "1", "msg": "Ath1"},
+                    {"dataType": "passing", "bib": "202", "brutetime": "12:34:57.123", "Mod": "1", "msg": "Ath2"},
+                    {"dataType": "passing", "bib": "303", "brutetime": "12:34:58.500", "Mod": "1", "msg": "Ath3"}
                 ]
                 
                 for p in payloads:

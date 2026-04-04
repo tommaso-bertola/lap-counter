@@ -88,5 +88,12 @@ class DisplayConfigHandler:
         
         elif name == "do_not_transform":
             return value
+        
+        elif name=='pad_bib_space':
+            # add spaces to the left until length is 4
+            return value.rjust(4)
+        elif name=='pad_bib_zero':
+            # add zeros to the left until length is 4
+            return value.zfill(4)
             
         return value

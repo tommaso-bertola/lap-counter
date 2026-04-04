@@ -7,7 +7,10 @@
     "ip": "192.168.1.12",
     "port": 4422,
     "settings": {
-      "reset_before_send": false
+      "reset_before_send": false,
+      "close_threshold_seconds": 5.0,
+      "rotation_interval_seconds": 2.0,
+      "min_display_time_seconds": 10.0
     }
   },
   "inRace_settings": {
@@ -24,12 +27,12 @@
       "col": 0,
       "field": "bib",
       "transforms": [
-        "do_not_transform"
+        "pad_bib_space"
       ]
     },
     {
       "row": "A",
-      "col": 4,
+      "col": 5,
       "field": "msg",
       "transforms": [
         "do_not_transform"
