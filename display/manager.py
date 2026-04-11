@@ -4,6 +4,7 @@ import logging
 from typing import List, Dict, Any
 
 from display.board import DisplayBoard
+from display.pagination import PaginationManager
 
 class DisplayEvent:
     def __init__(self, actions: List[Dict[str, Any]], should_reset: bool):
@@ -144,3 +145,15 @@ class DisplayManager:
                 if need_switch:
                     next_index = (self.current_index + 1) % len(self.active_events)
                     self._switch_to_event(next_index)
+
+def make_display_manager(board: DisplayBoard, config: Dict[str, Any] = None) -> Any:
+    """
+    Factory function to create a DisplayManager based on configuration.
+    """
+    if config is None:
+        config = {}
+    mode = config.get("manager_mode", "single")
+    if mode == "pagination" or mode == "multi_athlete":
+        return PaginationManager(board, config)
+    else:
+        return DisplayManager(board, config)

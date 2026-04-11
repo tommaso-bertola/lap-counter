@@ -17,7 +17,7 @@ class TCPClient:
         if self.timeout is not None:
             self.sock.settimeout(self.timeout)
         self.sock.connect((self.host, self.port))
-        logging.info(f"Connected to {self.host}:{self.port}")
+        logging.debug(f"Connected to {self.host}:{self.port}")
 
     def receive_chunks(self, chunk_size: int = 4096):
         """Generator that yields data chunks from the socket."""
@@ -28,7 +28,7 @@ class TCPClient:
             try:
                 chunk = self.sock.recv(chunk_size)
                 if not chunk:
-                    logging.info("Connection closed by server")
+                    logging.debug("Connection closed by server")
                     break
                 yield chunk
             except socket.timeout:
@@ -52,7 +52,7 @@ class TCPClient:
         if self.sock:
             self.sock.close()
             self.sock = None
-            logging.info("Connection closed")
+            logging.debug("Connection closed")
 
     def __enter__(self):
         self.connect()

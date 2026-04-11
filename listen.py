@@ -11,12 +11,15 @@ from storage.disk import MessageStore
 from display.board import DisplayBoard
 from display.config_handler import DisplayConfigHandler
 from display.manager import DisplayManager
+from display.protocols import AlphaProtocol, GraphProtocol
+from display.manager import make_display_manager
 
 # Connection defaults
 DEFAULT_HOST = "192.168.1.12"
 DEFAULT_PORT = 1234
 DEFAULT_DISPLAY_IP = "192.168.1.12"
 DEFAULT_DISPLAY_PORT = 4422
+DEFAULT_PROTOCOL = "alpha"
 
 
 def _default_user_config_path() -> Path:
@@ -94,10 +97,19 @@ def main():
     DISPLAY_IP = os.environ.get("DISPLAY_IP", disp_cfg.get("ip", DEFAULT_DISPLAY_IP))
     DISPLAY_PORT = int(os.environ.get("DISPLAY_PORT", disp_cfg.get("port", DEFAULT_DISPLAY_PORT)))
 
+    protocol_type = os.environ.get("DISPLAY_PROTOCOL", disp_cfg.get("protocol", DEFAULT_PROTOCOL))
+    if protocol_type == "alpha":
+        protocol = AlphaProtocol()
+    elif protocol_type == "graph":
+        font_size = os.environ.get("DISPLAY_FONT_SIZE", disp_cfg.get("default_font", 1))
+        protocol = GraphProtocol(default_font=font_size)
+    else:
+        raise ValueError(f"Unknown protocol type: {protocol_type}. Allowed: alpha, graph")
+
     parser = JSONStreamParser()
     store = MessageStore(directory="output")
-    display_board = DisplayBoard(ip=DISPLAY_IP, port=DISPLAY_PORT)
-    display_manager = DisplayManager(display_board, config=disp_cfg.get("settings", {}))
+    display_board = DisplayBoard(ip=DISPLAY_IP, port=DISPLAY_PORT, protocol=protocol)
+    display_manager = make_display_manager(display_board, config=disp_cfg.get("settings", {}))
 
     try:
         # Connect to the data source

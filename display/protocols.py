@@ -39,7 +39,7 @@ class AlphaProtocol(DisplayProtocol):
             checksum = (checksum + byte_val) & 127
         return checksum
 
-    def format_text(self, text: str, row: str = None, col: int = None, width: int = None) -> bytes:
+    def format_text(self, text: str, row: str = None, col: int = None, width: int = None, **kwargs) -> bytes:
         """
         Formats the message for the Microtab LED display using ALPHA protocol.
         """
@@ -87,13 +87,222 @@ class AlphaProtocol(DisplayProtocol):
 
 class GraphProtocol(DisplayProtocol):
     """
-    Placeholder for the Microgate GRAPH protocol.
-    To be implemented in the future.
+    Microgate GRAPH protocol implementation.
     """
-    def format_text(self, text: str, x: int = 0, y: int = 0, font: int = 1, bin_op: int = 0) -> bytes:
-        # Implementation details for Graph Protocol go here
-        raise NotImplementedError("Graph protocol not yet implemented.")
+    ESC = 0x1B
+    ETX = 0x03
+    ADDRESS = 0x40  # '@' identifier for graph mode
 
-    def get_reset_packet(self, strong: bool = True) -> bytes:
-        # Implementation details for Graph Protocol go here
-        raise NotImplementedError("Graph protocol reset not yet implemented.")
+    # Font dimensions based on Microgate documentation (MicroTabLED_EN.md and graphic_protocol.md)
+    # Mapping: FontID -> (Height, Column Width)
+    FONT_DIMENSIONS = {
+        0: (15, 10), # Default (assumed same as Medium)
+        1: (9, 7),   # Small (9x7 non-proportional)
+        2: (15, 10), # Medium Proportional (Height 15, Column width 10 per documentation)
+        3: (31, 21), # Large (31xVar, estimated width)
+        7: (16, 11), # Unicode (16xVar, estimated width)
+    }
+
+    def __init__(self, default_font: int = 1, default_bin_op: int = 0):
+        self.default_font = default_font
+        self.default_bin_op = default_bin_op
+
+    def _calculate_checksum(self, packet: bytearray) -> int:
+        """
+        Calculates the Microgate GRAPH protocol checksum.
+        7-bit checksum executed for the whole frame (sum of bytes & 0x7F).
+        """
+        return sum(packet) & 0x7F
+
+    def _calculate_alpha_checksum(self, payload: str) -> int:
+        """
+        Calculates the Microgate ALFA protocol checksum.
+        Used for legacy reset commands on graphical boards.
+        """
+        checksum = 30
+        for char in payload:
+            byte_val = ord(char) & 127
+            checksum = (checksum + byte_val) & 127
+        return checksum
+
+    def _build_header(self, command: str, x: int, y: int, bin_op: int, font: int) -> bytearray:
+        """
+        Builds the standard GRAPH protocol header.
+        """
+        packet = bytearray()
+        packet.append(self.ESC)
+        packet.append(self.ADDRESS)
+        packet.append(ord(command))
+        
+        packet.append(x & 0xFF)
+        packet.append((x >> 8) & 0xFF)
+        packet.append(y & 0xFF)
+        packet.append((y >> 8) & 0xFF)
+        
+        packet.append(bin_op)
+        packet.append(font)
+        
+        return packet
+
+    def _finalize_packet(self, packet: bytearray) -> bytes:
+        """
+        Appends ETX and calculate/append Checksum.
+        """
+        packet.append(self.ETX)
+        checksum = self._calculate_checksum(packet)
+        packet.append(checksum)
+        return bytes(packet)
+
+    def format_text(self, text: str, x: int = None, y: int = None, font: int = None, bin_op: int = None, add_null_terminator: bool = False, invert: bool = False, **kwargs) -> bytes:
+        """
+        Formats a Write Fixed String command ('S') for the GRAPH protocol.
+        Maps 'row' and 'col' from kwargs to x and y based on the selected font's dimensions.
+        """
+        f = font if font is not None else self.default_font
+        
+        # If invert is requested, we use bin_op 1 (NOT) and pad the text
+        if invert:
+            bo = 1
+            # Pad text to 81 characters to ensure the whole row background is lit
+            text = text.ljust(81)
+        else:
+            bo = bin_op if bin_op is not None else self.default_bin_op
+        
+        # Determine dimensions for the current font
+        base_font_id = f & 0x3F # Mask off alignment bits (128 right, 64 center)
+        height, width = self.FONT_DIMENSIONS.get(base_font_id, self.FONT_DIMENSIONS[0])
+        # remove the spacing between rows
+        height-=1
+        
+        # Map row/col to x/y if needed
+        final_x = x
+        final_y = y
+        
+        if final_x is None:
+            col = kwargs.get('col', 0)
+            try:
+                final_x = int(col) * width
+            except (ValueError, TypeError):
+                final_x = 0
+                
+        if final_y is None:
+            row = kwargs.get('row', 'A')
+            try:
+                if isinstance(row, str) and len(row) == 1 and row.isalpha():
+                    # Map "A" -> 0, "B" -> 1, etc.
+                    row_idx = ord(row.upper()) - ord('A')
+                else:
+                    row_idx = int(row)
+                final_y = row_idx * height
+            except (ValueError, TypeError):
+                final_y = 0
+
+        packet = self._build_header('S', final_x, final_y, bo, f)
+        
+        # String <= 81 bytes
+        encoded_text = text.encode('ascii', errors='ignore')[:81]
+        packet.extend(encoded_text)
+        
+        if add_null_terminator:
+            packet.append(0x00)
+            
+        return self._finalize_packet(packet)
+
+    def get_reset_packet(self, strong: bool = True, x: int = 0, y: int = 0, width: int = 810, height: int = 384, **kwargs) -> bytes:
+        """
+        Get the packet for resetting/clearing the display.
+        According to graphic_protocol.md Line 5, GRAPH boards interpret ALPHA
+        commands if sent with an ALPHA address (like ' ').
+        This sends a broadcast ALPHA "Strong Reset" for the most thorough clearing.
+        """
+        command = "r" if strong else "R"
+        payload = f" {command}" # space + command
+        
+        checksum = self._calculate_alpha_checksum(payload)
+        
+        packet = bytearray()
+        packet.append(self.ESC)
+        packet.extend(payload.encode('ascii'))
+        packet.append(self.ETX)
+        packet.append(checksum)
+        
+        return bytes(packet)
+
+    def display_date(self, mode: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+        """
+        Display Date - Active Object ('A')
+        mode: 1 = DD/MM/YY; 2 = DD MM YY
+        """
+        f = font if font is not None else self.default_font
+        bo = bin_op if bin_op is not None else self.default_bin_op
+        packet = self._build_header('A', x, y, bo, f)
+        packet.append(mode & 0xFF)
+        return self._finalize_packet(packet)
+
+    def select_font(self, font: int, x: int = 0, y: int = 0, bin_op: int = 0) -> bytes:
+        """
+        Select Font ('F')
+        """
+        packet = self._build_header('F', x, y, bin_op, font)
+        return self._finalize_packet(packet)
+
+    def insert_images(self, image_data: bytes, width: int, height: int, x: int = 0, y: int = 0, bin_op: int = 0) -> bytes:
+        """
+        Insert Images ('I')
+        """
+        packet = self._build_header('I', x, y, bin_op, 0)
+        packet.append(width & 0xFF)
+        packet.append((width >> 8) & 0xFF)
+        packet.append(height & 0xFF)
+        packet.append((height >> 8) & 0xFF)
+        packet.extend(image_data)
+        return self._finalize_packet(packet)
+
+    def display_internal_clock(self, display_format: int, delay: int = 0, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+        """
+        Internal Clock Display (RTC) - Active Object ('N')
+        display_format: 1=HH:MM:SS, 2=MM:SS, 3=HH:MM(24h), 4=HH:MM(12h)
+        delay: Advance/delay in thousandths
+        """
+        f = font if font is not None else self.default_font
+        bo = bin_op if bin_op is not None else self.default_bin_op
+        packet = self._build_header('N', x, y, bo, f)
+        
+        packet.append(display_format & 0xFF)
+        
+        # 4 bytes delay, signed long (31 bit + symbol)
+        try:
+            delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
+        except OverflowError:
+            delay = max(min(delay, 2147483647), -2147483648)
+            delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
+        packet.extend(delay_bytes)
+        
+        return self._finalize_packet(packet)
+
+    def write_scrolling_string(self, text: str, width: int, delay: int, display_width: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+        """
+        Write Scrolling String - Active Object ('O')
+        """
+        f = font if font is not None else self.default_font
+        bo = bin_op if bin_op is not None else self.default_bin_op
+        packet = self._build_header('O', x, y, bo, f)
+        
+        packet.append(width & 0xFF)
+        packet.append((width >> 8) & 0xFF)
+        packet.append(delay & 0xFF)
+        packet.append((delay >> 8) & 0xFF)
+        packet.append(display_width & 0xFF)
+        
+        encoded_text = text.encode('ascii', errors='ignore')[:255]
+        packet.extend(encoded_text)
+        packet.append(0x00) # null terminator required
+        
+        return self._finalize_packet(packet)
+
+    def deactivate_active_object(self, x: int, y: int) -> bytes:
+        """
+        Deactivating an active object ('t')
+        """
+        packet = self._build_header('t', x, y, 0, 0)
+        return self._finalize_packet(packet)

@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 from network.client import TCPClient
-from display.protocols import DisplayProtocol, AlphaProtocol
+from display.protocols import DisplayProtocol, AlphaProtocol, GraphProtocol
 
 def _format_packet(packet: bytes) -> str:
     """Convert a byte packet into a human-readable string."""
@@ -18,10 +18,10 @@ class DisplayBoard:
     Higher-level class for managing communication with a display board.
     Takes a protocol (ALPHA/GRAPH) and handles sending messages.
     """
-    def __init__(self, ip: str, port: int, protocol: DisplayProtocol = None):
+    def __init__(self, ip: str, port: int, protocol: DisplayProtocol):
         self.ip = ip
         self.port = port
-        self.protocol = protocol or AlphaProtocol()
+        self.protocol = protocol
 
     def reset(self, strong: bool = True):
         """Hard reset the display board (clears everything)."""
@@ -46,7 +46,7 @@ class DisplayBoard:
             with TCPClient(self.ip, self.port) as client:
                 logging.info(f"Sending text packet to {self.ip}:{self.port}: {_format_packet(packet)}")
                 client.send(packet)
-            logging.info("Message sent successfully!")
+            logging.debug("Message sent successfully!")
         except Exception as e:
             logging.error(f"Error sending message to display board: {e}")
             raise

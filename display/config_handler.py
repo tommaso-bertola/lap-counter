@@ -30,6 +30,11 @@ class DisplayConfigHandler:
         return self.config.get("network", {"host": "127.0.0.1", "port": 1234})
 
     @property
+    def pagination_config(self) -> Dict[str, Any]:
+        """Returns the pagination settings."""
+        return self.config.get("display", {}).get("settings", {}).get("pagination", {})
+
+    @property
     def display_config(self) -> Dict[str, Any]:
         """Returns the display configuration."""
         return self.config.get("display", {"ip": "127.0.0.1", "port": 4422})
