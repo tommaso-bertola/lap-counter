@@ -4,16 +4,20 @@
     "port": 1234
   },
   "display": {
-    "ip": "192.168.1.12",
+    "ip": "192.168.0.123",
     "port": 21967,
+    "protocol": "graph",
+    "default_font": 1,
     "settings": {
       "reset_before_send": false,
       "manager_mode": "pagination",
       "pagination": {
         "close_threshold_seconds": 10.0,
-        "max_age_seconds": 15.0,
-        "refresh_interval_seconds": 2.0,
-        "n_display_rows": 2
+        "max_age_seconds": 20.0,
+        "refresh_interval_seconds": 1.0,
+        "n_display_rows": 2,
+        "n_display_columns": 2,
+        "invert_even_rows": false
       }
     }
   },
@@ -22,7 +26,7 @@
     "process_for_display": false
   },
   "passing_settings": {
-    "save_to_disk": true,
+    "save_to_disk": false,
     "process_for_display": true
   },
   "passing": [
@@ -31,12 +35,12 @@
       "col": 0,
       "field": "bib",
       "transforms": [
-        "pad_bib_space"
+        "pad_bib_space_3"
       ]
     },
     {
       "row": "A",
-      "col": 5,
+      "col": 4,
       "field": "msg",
       "transforms": [
         "do_not_transform"

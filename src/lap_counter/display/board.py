@@ -1,7 +1,7 @@
 import logging
 from typing import Any
-from network.client import TCPClient
-from display.protocols import DisplayProtocol, AlphaProtocol, GraphProtocol
+from lap_counter.network.client import TCPClient
+from lap_counter.display.protocols import DisplayProtocol, AlphaProtocol, GraphProtocol
 
 def _format_packet(packet: bytes) -> str:
     """Convert a byte packet into a human-readable string."""

@@ -2,7 +2,7 @@ import time
 import threading
 import logging
 from typing import List, Dict, Any, Optional
-from display.board import DisplayBoard
+from lap_counter.display.board import DisplayBoard
 
 class AthleteResult:
     def __init__(self, key: str, actions: List[Dict[str, Any]]):
@@ -154,7 +154,7 @@ class PaginationManager:
 
         # Perform the actual update cell by cell using a single connection
         try:
-            from network.client import TCPClient
+            from lap_counter.network.client import TCPClient
             with TCPClient(self.board.ip, self.board.port) as client:
                 for i, state in enumerate(current_view_states):
                     if state == self.last_display_state[i]:

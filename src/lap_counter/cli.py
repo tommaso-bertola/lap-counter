@@ -5,14 +5,13 @@ import logging
 import platform
 from pathlib import Path
 from importlib import resources
-from network.client import TCPClient
-from parsing.json_stream import JSONStreamParser
-from storage.disk import MessageStore
-from display.board import DisplayBoard
-from display.config_handler import DisplayConfigHandler
-# from display.manager import DisplayManager
-from display.protocols import AlphaProtocol, GraphProtocol
-from display.manager import make_display_manager
+from lap_counter.network.client import TCPClient
+from lap_counter.parsing.json_stream import JSONStreamParser
+from lap_counter.storage.disk import MessageStore
+from lap_counter.display.board import DisplayBoard
+from lap_counter.display.config_handler import DisplayConfigHandler
+from lap_counter.display.protocols import AlphaProtocol, GraphProtocol
+from lap_counter.display.manager import make_display_manager
 
 # Connection defaults
 DEFAULT_HOST = "192.168.1.12"
@@ -35,7 +34,7 @@ def _default_user_config_path() -> Path:
 
 def _bootstrap_user_config(target_path: Path) -> bool:
     try:
-        default_content = resources.files("display").joinpath("default_config.json").read_text(encoding="utf-8")
+        default_content = resources.files("lap_counter.display").joinpath("default_config.json").read_text(encoding="utf-8")
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(default_content, encoding="utf-8")
         return True

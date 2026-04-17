@@ -25,15 +25,18 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-lap-counter = "listen:main"
+lap-counter = "lap_counter.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/tommasobertola/lap-counter"
 Repository = "https://github.com/tommasobertola/lap-counter"
 
 [tool.setuptools]
-py-modules = ["listen"]
-packages = ["display", "network", "parsing", "storage"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["lap_counter*"]
 
 [tool.setuptools.package-data]
-display = ["*.json"]
+"lap_counter.display" = ["*.json"]

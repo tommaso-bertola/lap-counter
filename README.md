@@ -38,7 +38,7 @@ To run the utility after installing via pip, simply run:
 
 From the project root:
 
-`python listen.py`
+`PYTHONPATH=src python -m lap_counter.cli`
 
 ### Install as a package
 
@@ -92,7 +92,7 @@ If it does not exist, the app creates it automatically on first run using the bu
  Usually, the port is `29672` for the Microtab Led Display, but remember to check.
  5. Edit the `config.json` file to set the right IP address and port for the Microgate display and the Wiclax server connection settings.
  6. Edit the `config.json` changing the `display.settings` parameters to your needs.
- 7. Launch the utility and enjoy the show! `python listen.py` (or `lap-counter` if installed as a package)
+ 7. Launch the utility and enjoy the show! `PYTHONPATH=src python -m lap_counter.cli` (or `lap-counter` if installed as a package)
 
 
 As you can see in `config.json`, it is possible to customize the display settings, such as the position of the text and some basic transforms to the text (e.g. uppercase, lowercase, ...). The utility will apply the transforms to the text before sending it to the display.

@@ -3,8 +3,8 @@ import threading
 import logging
 from typing import List, Dict, Any
 
-from display.board import DisplayBoard
-from display.pagination import PaginationManager
+from lap_counter.display.board import DisplayBoard
+from lap_counter.display.pagination import PaginationManager
 
 class DisplayEvent:
     def __init__(self, actions: List[Dict[str, Any]], should_reset: bool):
