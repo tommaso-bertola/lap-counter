@@ -10,7 +10,7 @@ from parsing.json_stream import JSONStreamParser
 from storage.disk import MessageStore
 from display.board import DisplayBoard
 from display.config_handler import DisplayConfigHandler
-from display.manager import DisplayManager
+# from display.manager import DisplayManager
 from display.protocols import AlphaProtocol, GraphProtocol
 from display.manager import make_display_manager
 

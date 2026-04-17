@@ -156,4 +156,5 @@ def make_display_manager(board: DisplayBoard, config: Dict[str, Any] = None) -> 
     if mode == "pagination" or mode == "multi_athlete":
         return PaginationManager(board, config)
     else:
-        return DisplayManager(board, config)
+        raise NotImplementedError(f"Manager mode {mode} is removed from code.")  
+        # return DisplayManager(board, config)

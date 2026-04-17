@@ -43,8 +43,12 @@ class DisplayBoard:
             
             # Send the new text
             packet = self.protocol.format_text(text, **kwargs)
+            row = kwargs.get('row', 'A')
+            col = kwargs.get('col', 0)
+            clean_text = "".join(c for c in text if c.isprintable()).strip()
+            
             with TCPClient(self.ip, self.port) as client:
-                logging.info(f"Sending text packet to {self.ip}:{self.port}: {_format_packet(packet)}")
+                logging.info(f"Packet: [R:{row} C:{col}] \"{clean_text}\"")
                 client.send(packet)
             logging.debug("Message sent successfully!")
         except Exception as e:

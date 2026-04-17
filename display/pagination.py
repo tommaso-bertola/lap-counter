@@ -24,6 +24,7 @@ class PaginationManager:
         self.max_age = pag_cfg.get("max_age_seconds", 15.0)
         self.refresh_interval = pag_cfg.get("refresh_interval_seconds", 2.0)
         self.n_rows = pag_cfg.get("n_display_rows", 2)
+        self.invert_even_rows = pag_cfg.get("invert_even_rows", True)
         
         self.active_results: List[AthleteResult] = []
         self.lock = threading.Lock()
@@ -164,8 +165,8 @@ class PaginationManager:
                     
                     row_text = "".join(row_buffer).rstrip()
                     
-                    # Even rows (2nd, 4th, etc. -> index 1, 3, ...) are inverted
-                    is_even_row = (i % 2 == 1)
+                    # Even rows (2nd, 4th, etc. -> index 1, 3, ...) are inverted if configured
+                    is_even_row = (i % 2 == 1) and self.invert_even_rows
                     
                     self.board.send_text(row_text, row=row_letter, col=0, reset=False, invert=is_even_row)
                 
