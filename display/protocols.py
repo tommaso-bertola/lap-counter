@@ -45,14 +45,13 @@ class AlphaProtocol(DisplayProtocol):
         """
         r = row or self.default_row
         c = col if col is not None else self.default_col
-        w = width if width is not None else self.default_width
+        w = width if width is not None else (self.default_width - c)
 
-        # Format the payload: Row ID + 'S' + Column ID (2 digits) + text
-        payload = f"{r}S{c:02d}{text}"
+        # Pad text to width to clear existing content in the cell
+        padded_text = text.ljust(w)
         
-        # Pad with spaces to clear any existing long strings
-        if len(payload) < w:
-            payload = payload.ljust(w)
+        # Format the payload: Row ID + 'S' + Column ID (2 digits) + text
+        payload = f"{r}S{c:02d}{padded_text}"
         
         checksum = self._calculate_checksum(payload)
         
@@ -153,26 +152,30 @@ class GraphProtocol(DisplayProtocol):
         packet.append(checksum)
         return bytes(packet)
 
-    def format_text(self, text: str, x: int = None, y: int = None, font: int = None, bin_op: int = None, add_null_terminator: bool = False, invert: bool = False, **kwargs) -> bytes:
+    def format_text(self, text: str, x: int = None, y: int = None, font: int = None, bin_op: int = None, add_null_terminator: bool = True, invert: bool = False, width: int = None, **kwargs) -> bytes:
         """
         Formats a Write Fixed String command ('S') for the GRAPH protocol.
         Maps 'row' and 'col' from kwargs to x and y based on the selected font's dimensions.
         """
         f = font if font is not None else self.default_font
+        w = width if width is not None else 81
         
         # If invert is requested, we use bin_op 1 (NOT) and pad the text
         if invert:
             bo = 1
-            # Pad text to 81 characters to ensure the whole row background is lit
-            text = text.ljust(81)
+            # Pad text to width to ensure the cell background is lit
+            text = text.ljust(w)
         else:
             bo = bin_op if bin_op is not None else self.default_bin_op
+        
+        # Ensure text is not longer than width and total protocol limit (81)
+        text = text[:min(w, 81)]
         
         # Determine dimensions for the current font
         base_font_id = f & 0x3F # Mask off alignment bits (128 right, 64 center)
         height, width = self.FONT_DIMENSIONS.get(base_font_id, self.FONT_DIMENSIONS[0])
         # remove the spacing between rows
-        height-=1
+        # height-=1
         
         # Map row/col to x/y if needed
         final_x = x
@@ -199,8 +202,10 @@ class GraphProtocol(DisplayProtocol):
 
         packet = self._build_header('S', final_x, final_y, bo, f)
         
-        # String <= 81 bytes
-        encoded_text = text.encode('ascii', errors='ignore')[:81]
+        # String <= 81 bytes (including null terminator if added)
+        # We truncate to 80 if null terminator is needed to stay within 81 byte limit
+        max_len = 80 if add_null_terminator else 81
+        encoded_text = text.encode('ascii', errors='ignore')[:max_len]
         packet.extend(encoded_text)
         
         if add_null_terminator:
@@ -208,25 +213,21 @@ class GraphProtocol(DisplayProtocol):
             
         return self._finalize_packet(packet)
 
-    def get_reset_packet(self, strong: bool = True, x: int = 0, y: int = 0, width: int = 810, height: int = 384, **kwargs) -> bytes:
+    def get_reset_packet(self, strong: bool = True, x: int = 0, y: int = 0, width: int = 96, height: int = 16, **kwargs) -> bytes:
         """
         Get the packet for resetting/clearing the display.
-        According to graphic_protocol.md Line 5, GRAPH boards interpret ALPHA
-        commands if sent with an ALPHA address (like ' ').
-        This sends a broadcast ALPHA "Strong Reset" for the most thorough clearing.
+        Uses the native GRAPH protocol 'Q' (Reset Area) command.
         """
-        command = "r" if strong else "R"
-        payload = f" {command}" # space + command
+        # Command 'Q' (Reset Area)
+        # Data area: X Dimension (2 bytes), Y Dimension (2 bytes)
+        packet = self._build_header('Q', x, y, 0, 0)
         
-        checksum = self._calculate_alpha_checksum(payload)
+        packet.append(width & 0xFF)
+        packet.append((width >> 8) & 0xFF)
+        packet.append(height & 0xFF)
+        packet.append((height >> 8) & 0xFF)
         
-        packet = bytearray()
-        packet.append(self.ESC)
-        packet.extend(payload.encode('ascii'))
-        packet.append(self.ETX)
-        packet.append(checksum)
-        
-        return bytes(packet)
+        return self._finalize_packet(packet)
 
     def display_date(self, mode: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
         """

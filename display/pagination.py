@@ -24,14 +24,34 @@ class PaginationManager:
         self.max_age = pag_cfg.get("max_age_seconds", 15.0)
         self.refresh_interval = pag_cfg.get("refresh_interval_seconds", 2.0)
         self.n_rows = pag_cfg.get("n_display_rows", 2)
+        self.n_cols = pag_cfg.get("n_display_columns", 1)
         self.invert_even_rows = pag_cfg.get("invert_even_rows", True)
+
+        # Calculate layout dimensions dynamically
+        protocol_name = getattr(board.protocol, "__class__", "").__name__
+        if "Alpha" in protocol_name:
+            self.board_width = 45 # Standard ALPHA width in characters
+            self.board_height_px = 16 # Not strictly used for ALPHA
+        else:
+            # Graph board dimension is in pixels. User board is 96x16 pixels.
+            # We must convert pixels to characters based on the active font.
+            self.board_width_px = 96
+            self.board_height_px = 16
+            font_id = getattr(board.protocol, "default_font", 1)
+            # FONT_DIMENSIONS: FontID -> (Height, Column Width)
+            font_dims = getattr(board.protocol, "FONT_DIMENSIONS", {0: (15, 10)})
+            _, font_width = font_dims.get(font_id & 0x3F, font_dims.get(0))
+            self.board_width = self.board_width_px // font_width
+        
+        self.cell_width = self.board_width // self.n_cols
+        self.total_slots = self.n_rows * self.n_cols
         
         self.active_results: List[AthleteResult] = []
         self.lock = threading.Lock()
         
         self.scroll_offset = 0
         self.last_scroll_time = 0.0
-        self.last_display_state: List[Optional[str]] = [None] * self.n_rows
+        self.last_display_state: List[Optional[str]] = [None] * self.total_slots
         
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -88,12 +108,12 @@ class PaginationManager:
                 if not self.active_results:
                     if needs_paint:
                         self.board.reset(strong=True)
-                        self.last_display_state = [None] * self.n_rows
+                        self.last_display_state = [None] * self.total_slots
                     self.scroll_offset = 0
                     continue
 
                 # 2. Scrolling logic
-                if len(self.active_results) <= self.n_rows:
+                if len(self.active_results) <= self.total_slots:
                     # No scrolling needed if we can fit everyone
                     if self.scroll_offset != 0 or needs_paint:
                         self.scroll_offset = 0
@@ -113,64 +133,88 @@ class PaginationManager:
         Renders the current window of results to the board.
         Only sends updates if content actually changed.
         """
-        current_view_keys = []
         num_athletes = len(self.active_results)
-        
-        for i in range(self.n_rows):
-            if i < num_athletes:
-                # Wrap around for scrolling
-                idx = (self.scroll_offset + i) % num_athletes
-                athlete = self.active_results[idx]
-                
-                # Create a cache key for this row: athlete_key + arrival_time (to detect updates)
-                row_state = f"{athlete.key}_{athlete.arrival_time}"
-            else:
-                row_state = "" # Empty row
-            
-            current_view_keys.append(row_state)
+        current_view_states = []
 
-        # Check for redundant refresh
-        if current_view_keys == self.last_display_state:
-            return
-
-        # Perform the actual update
-        try:
-            for i, state in enumerate(current_view_keys):
-                if state == self.last_display_state[i]:
-                    continue # Skip unchanged rows
+        # Map each cell (row, col) to an athlete or empty state (Row-major)
+        for r in range(self.n_rows):
+            for c in range(self.n_cols):
+                # Calculate slot index in flat state list
+                slot_idx = c + r * self.n_cols
                 
-                row_letter = chr(ord('A') + i)
-                
-                if state == "":
-                    # Clear this row
-                    self.board.send_text("", row=row_letter, col=0, reset=False)
-                else:
-                    idx = (self.scroll_offset + i) % num_athletes
+                if slot_idx < num_athletes:
+                    # Wrap around for scrolling
+                    idx = (self.scroll_offset + slot_idx) % num_athletes
                     athlete = self.active_results[idx]
-                    
-                    # Assemble row text from actions.
-                    # We merge all actions for one athlete into a single string for that row.
-                    # This ensures that for inverted rows (white on black), the whole background
-                    # is lit and the text blocks are correctly subtracted.
-                    row_buffer = list(" " * 81)
-                    for action in athlete.actions:
-                        text = str(action.get('text', ''))
-                        try:
-                            col = int(action.get('col', 0))
-                        except (ValueError, TypeError):
-                            col = 0
-                        for j, char in enumerate(text):
-                            if 0 <= col + j < len(row_buffer):
-                                row_buffer[col + j] = char
-                    
-                    row_text = "".join(row_buffer).rstrip()
-                    
-                    # Even rows (2nd, 4th, etc. -> index 1, 3, ...) are inverted if configured
-                    is_even_row = (i % 2 == 1) and self.invert_even_rows
-                    
-                    self.board.send_text(row_text, row=row_letter, col=0, reset=False, invert=is_even_row)
+                    state = f"{athlete.key}_{athlete.arrival_time}"
+                else:
+                    state = "" # Empty cell
                 
-                self.last_display_state[i] = state
+                current_view_states.append(state)
+
+        # Perform the actual update cell by cell using a single connection
+        try:
+            from network.client import TCPClient
+            with TCPClient(self.board.ip, self.board.port) as client:
+                for i, state in enumerate(current_view_states):
+                    if state == self.last_display_state[i]:
+                        continue # Skip unchanged cells
+                    
+                    # Determine row and col from current layout (row-major)
+                    r = i // self.n_cols
+                    c = i % self.n_cols
+                    
+                    row_letter = chr(ord('A') + r)
+                    if c!=0:
+                        col_start = c * self.cell_width + 1
+                    else:
+                        col_start = c * self.cell_width 
+                    
+                    # Special handling for row position on small boards (e.g. 16px high)
+                    # If we have 2 rows and the board is 16px high, Row B (r=1) 
+                    # should start at y=7 instead of y=9 to fit the 9px height.
+                    final_y = None
+                    if self.board_height_px == 16 and self.n_rows == 2 and r == 1:
+                        final_y = 8
+                    
+                    if state == "":
+                        # Clear this cell by sending an empty string with cell width
+                        logging.info(f"Cell Clear: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start}")
+                        self.board.send_text("", row=row_letter, col=col_start, reset=False, client=client, width=self.cell_width)
+                    else:
+                        # Calculate index in active_results
+                        idx = (self.scroll_offset + i) % num_athletes
+                        athlete = self.active_results[idx]
+                        
+                        # Assemble cell text from actions.
+                        # We merge all actions for one athlete into a buffer sized for the cell.
+                        cell_buffer = list(" " * self.cell_width)
+                        for action in athlete.actions:
+                            text = str(action.get('text', ''))
+                            try:
+                                # Relative col position within the cell
+                                # Note: athlete.actions usually have absolute col but here we treat
+                                # them as relative to the starting col of the cell if they were 
+                                # configured for a single-column layout.
+                                # However, if the user configures specific cols, they might overlap.
+                                # We'll assume the configuration is meant for a single column (0-40).
+                                rel_col = int(action.get('col', 0))
+                            except (ValueError, TypeError):
+                                rel_col = 0
+                                
+                            for j, char in enumerate(text):
+                                if 0 <= rel_col + j < len(cell_buffer):
+                                    cell_buffer[rel_col + j] = char
+                        
+                        cell_text = "".join(cell_buffer).rstrip()
+                        logging.info(f"Cell Update: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start} Text='{cell_text}'")
+                        
+                        # Even rows are inverted if configured
+                        is_even_row = (r % 2 == 1) and self.invert_even_rows
+                        
+                        self.board.send_text(cell_text, row=row_letter, y=final_y, col=col_start, reset=False, client=client, invert=is_even_row, width=self.cell_width)
+                    
+                    self.last_display_state[i] = state
                 
         except Exception as e:
             logging.error(f"PaginationManager paint error: {e}")

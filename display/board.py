@@ -23,23 +23,27 @@ class DisplayBoard:
         self.port = port
         self.protocol = protocol
 
-    def reset(self, strong: bool = True):
+    def reset(self, strong: bool = True, client: Any = None):
         """Hard reset the display board (clears everything)."""
         try:
             packet = self.protocol.get_reset_packet(strong=strong)
-            with TCPClient(self.ip, self.port) as client:
-                logging.info(f"Sending reset packet to {self.ip}:{self.port}: {_format_packet(packet)}")
+            if client:
+                logging.info(f"Sending reset packet (persistent) to {self.ip}:{self.port}")
                 client.send(packet)
+            else:
+                with TCPClient(self.ip, self.port) as new_client:
+                    logging.info(f"Sending reset packet to {self.ip}:{self.port}")
+                    new_client.send(packet)
         except Exception as e:
             logging.error(f"Error resetting display board: {e}")
             raise
 
-    def send_text(self, text: str, reset: bool = True, **kwargs):
+    def send_text(self, text: str, reset: bool = True, client: Any = None, **kwargs):
         """Send formatted text to the display board, optionally clearing it first."""
         try:
             if reset:
                 # Clear the whole board with a hard reset
-                self.reset(strong=True)
+                self.reset(strong=True, client=client)
             
             # Send the new text
             packet = self.protocol.format_text(text, **kwargs)
@@ -47,9 +51,13 @@ class DisplayBoard:
             col = kwargs.get('col', 0)
             clean_text = "".join(c for c in text if c.isprintable()).strip()
             
-            with TCPClient(self.ip, self.port) as client:
-                logging.info(f"Packet: [R:{row} C:{col}] \"{clean_text}\"")
+            if client:
+                logging.info(f"Packet (persistent): [R:{row} C:{col}] \"{clean_text}\"")
                 client.send(packet)
+            else:
+                with TCPClient(self.ip, self.port) as new_client:
+                    logging.info(f"Packet: [R:{row} C:{col}] \"{clean_text}\"")
+                    new_client.send(packet)
             logging.debug("Message sent successfully!")
         except Exception as e:
             logging.error(f"Error sending message to display board: {e}")
