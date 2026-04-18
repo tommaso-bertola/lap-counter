@@ -98,8 +98,7 @@ class GraphProtocol(DisplayProtocol):
     FONT_DIMENSIONS = {
         0: (15, 10),  # Default (assumed same as Large)
         1: (9, 7),   # Small (9x7 non-proportional)
-        # Large Proportional (Height 15, Column width 10 per documentation)
-        2: (15, 10),
+        2: (15, 10), # Large Proportional (Height 15, Column width 10)
         3: (31, 21),  # Compact (31xVar, estimated width)
         7: (16, 11),  # Unicode (16xVar, estimated width)
     }

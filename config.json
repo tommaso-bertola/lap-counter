@@ -12,6 +12,7 @@
       "reset_before_send": false,
       "manager_mode": "pagination",
       "pagination": {
+        "offset_pagination": 2,
         "close_threshold_seconds": 10.0,
         "max_age_seconds": 20.0,
         "refresh_interval_seconds": 1.0,
@@ -30,7 +31,7 @@
     "save_to_disk": false,
     "process_for_display": true,
     "display_filter": {
-      "enabled": false,
+      "enabled": true,
       "field": "display",
       "value": "True"
     }

@@ -33,6 +33,7 @@ class PaginationManager:
         self.n_cols = pag_cfg.get("n_display_columns", 1)
         self.invert_even_rows = pag_cfg.get("invert_even_rows", True)
         self.special_mode = pag_cfg.get("special_mode", "inactive")
+        self.offset_pagination = pag_cfg.get("offset_pagination", 1)
 
         # Calculate layout dimensions dynamically
         protocol_name = getattr(board.protocol, "__class__", "").__name__
@@ -146,7 +147,7 @@ class PaginationManager:
                     if is_scrolling:
                         # Rotate to next page/athlete
                         self.scroll_offset = (
-                            self.scroll_offset + 1) % len(self.active_results)
+                            self.scroll_offset + self.offset_pagination) % len(self.active_results)
                     else:
                         # Static display, keep offset at 0
                         self.scroll_offset = 0
@@ -160,41 +161,43 @@ class PaginationManager:
 
     def _paint_special(self):
         """
-        Special paint mode when only 1 line and 2 columns are used.
-        Visualization:
-        1. first bib/name in font 3 compact from 0,0
+        Special paint mode when n_rows > 0 and 2 columns are used.
+        Visualization per row:
+        1. first bib/name in font 3 compact from x=0
         2. reset area from x=32 until end of board
-        3. second bib in font 3 compact from x=64
+        3. second bib in font 3 compact from x=96 (right aligned)
         4. msg info in center (string is center aligned)
         5. on pagination, full reset first.
+        Gap between physical boards is 1 LED row.
         """
 
         num_athletes = len(self.active_results)
 
-        if self.n_rows != 1 or self.n_cols != 2:
-            raise ValueError("Special mode only supports 1 row and 2 columns")
+        if self.n_cols != 2:
+            raise ValueError("Special mode only supports 2 columns")
 
-        # Determine the two athletes to show (page size = 2 in this mode)
-        idx1 = self.scroll_offset % num_athletes
-        ath1 = self.active_results[idx1]
+        total_slots = self.n_rows * 2
+        new_state = []
+        athletes_to_draw = []
 
-        idx2 = None
-        if num_athletes > 1:
-            idx2 = (self.scroll_offset + 1) % num_athletes
-        ath2 = self.active_results[idx2] if idx2 is not None else None
-
-        state1 = f"{ath1.key}_{ath1.arrival_time}" if ath1 else ""
-        state2 = f"{ath2.key}_{ath2.arrival_time}" if ath2 else ""
-
-        new_state = [state1, state2]
+        for i in range(total_slots):
+            if i < num_athletes:
+                idx = (self.scroll_offset + i) % num_athletes
+                ath = self.active_results[idx]
+                state = f"{ath.key}_{ath.arrival_time}"
+                athletes_to_draw.append(ath)
+            else:
+                state = ""
+                athletes_to_draw.append(None)
+            new_state.append(state)
 
         # If nothing changed since last paint, we don't repaint
         # However, to avoid 'list index out of range' with last_display_state,
-        # let's just check the first two slots.
-        if new_state == self.last_display_state[:2]:
+        # let's just check the slots.
+        if new_state == self.last_display_state[:total_slots]:
             return
 
-        self.last_display_state[:2] = new_state
+        self.last_display_state[:total_slots] = new_state
 
         try:
             from lap_counter.network.client import TCPClient
@@ -211,37 +214,44 @@ class PaginationManager:
                             return str(action.get('text', ''))
                     return " "
 
-                bib1 = get_field_text(ath1, "id")
-                bib2 = get_field_text(ath2, "id")
+                for r in range(self.n_rows):
+                    y_offset = r * 17
 
-                msg1 = get_field_text(ath1, "msg")
-                msg2 = get_field_text(ath2, "msg")
+                    ath1 = athletes_to_draw[r * 2]
+                    ath2 = athletes_to_draw[r * 2 + 1]
 
-                # 1. First bib printed in font 3 from 0,0
-                if bib1:
-                    self.board.send_text(
-                        bib1, x=0, y=0, font=3, reset=False, client=client)
+                    if not ath1 and not ath2:
+                        continue
 
-                # 2. Reset area from x=32 to end of board (w=64)
-                if hasattr(self.board.protocol, 'get_reset_packet'):
-                    packet = self.board.protocol.get_reset_packet(
-                        strong=True, x=32, y=0, width=64, height=16)
-                    client.send(packet)
+                    # Fallback cleanly if the athlete object is None
+                    bib1 = get_field_text(ath1, "id")
+                    bib2 = get_field_text(ath2, "id")
 
-                # 3. Second bib in font 3 from x=64
-                if bib2:
-                    # align to center of second half of board by adding spaces if needed
-                    self.board.send_text(
-                        bib2, x=96, y=0, font=3 | 128, reset=False, client=client)
+                    msg1 = get_field_text(ath1, "msg")
+                    msg2 = get_field_text(ath2, "msg")
 
-                # 4. Center msg info
-                center_msg = f"{msg1} {msg2}"
-                # logging.error(f"Center msg: {center_msg}")
-                if center_msg:
-                    # 'center' alignment in Graph protocol is bit 6 (64)
-                    # So font 3 + center = 67 (3 | 64)
-                    self.board.send_text(
-                        center_msg, x=48, y=0, font=2 | 64, reset=False, client=client)
+                    # 1. First bib printed in font 3 from 0,y
+                    if ath1:
+                        self.board.send_text(
+                            bib1, x=0, y=y_offset, font=3, reset=False, client=client)
+
+                    # 2. Reset area from x=32 to end of board (w=64) on this row
+                    # if hasattr(self.board.protocol, 'get_reset_packet'):
+                    #     packet = self.board.protocol.get_reset_packet(
+                    #         strong=True, x=32, y=y_offset, width=64, height=16)
+                    #     client.send(packet)
+
+                    # 3. Second bib in font 3 from x=96 right aligned
+                    if ath2:
+                        self.board.send_text(
+                            bib2, x=96, y=y_offset, font=3 | 128, reset=False, client=client)
+
+                    # 4. Center msg info
+                    center_msg = f"{msg1} {msg2}"
+                    if center_msg:
+                        # 'center' alignment in Graph protocol is bit 6 (64)
+                        self.board.send_text(
+                            center_msg, x=48, y=y_offset, font=2 | 64, reset=False, client=client)
 
         except Exception as e:
             logging.error(f"PaginationManager paint_special error: {e}")

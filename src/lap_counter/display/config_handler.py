@@ -56,6 +56,7 @@ class DisplayConfigHandler:
 
         # Check if display processing is enabled for this data type
         if not settings.get("process_for_display", True):
+            logging.debug(f"Display processing disabled for dataType: {data_type}")
             return False
 
         # Apply display filter if configured and enabled
@@ -66,8 +67,10 @@ class DisplayConfigHandler:
 
             # If the field is missing or does not match the expected value, filter it out
             if message.get(field) != expected_value:
+                logging.debug(f"Passing filtered out.")
                 return False
 
+        logging.debug(f"Message passed display filter.")
         return True
 
     def get_display_actions(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -106,17 +109,14 @@ class DisplayConfigHandler:
         """
         if name == "strip_bib_prefix":
             return value.replace("BIB:", "").strip()
-
         elif name == "append_mod_if_no_entra":
             mod = str(message.get("Mod", ""))
             # If the msg field does not contain "<-Entra", append the Mod value
             if "<-Entra" not in value:
                 return f"{value} {mod}".strip()
             return value
-
         elif name == "do_not_transform":
             return value
-
         elif name == 'pad_bib_space_4':
             # add spaces to the left until length is 4
             return value.rjust(4)
