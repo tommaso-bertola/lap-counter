@@ -27,7 +27,12 @@
   },
   "passing_settings": {
     "save_to_disk": false,
-    "process_for_display": true
+    "process_for_display": true,
+    "display_filter": {
+      "enabled": false,
+      "field": "display",
+      "value": true
+    }
   },
   "passing": [
     {

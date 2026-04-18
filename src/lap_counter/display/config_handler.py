@@ -44,10 +44,27 @@ class DisplayConfigHandler:
         settings_key = f"{data_type}_settings"
         return self.config.get(settings_key, {}).get("save_to_disk", True)
 
-    def should_process_for_display(self, data_type: str) -> bool:
-        """Returns True if the message should be processed for display based on its type."""
+    def should_process_for_display(self, message: Dict[str, Any]) -> bool:
+        """Returns True if the message should be processed for display based on its type and filter."""
+        data_type = message.get("dataType", "DATA")
         settings_key = f"{data_type}_settings"
-        return self.config.get(settings_key, {}).get("process_for_display", True)
+        settings = self.config.get(settings_key, {})
+        
+        # Check if display processing is enabled for this data type
+        if not settings.get("process_for_display", True):
+            return False
+            
+        # Apply display filter if configured and enabled
+        filter_cfg = settings.get("display_filter")
+        if filter_cfg and filter_cfg.get("enabled", False):
+            field = filter_cfg.get("field", "display")
+            expected_value = filter_cfg.get("value", "True")
+            
+            # If the field is missing or does not match the expected value, filter it out
+            if message.get(field) != expected_value:
+                return False
+                
+        return True
 
     def get_display_actions(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -107,5 +124,11 @@ class DisplayConfigHandler:
         elif name=='pad_bib_zero_4':
             # add zeros to the left until length is 4
             return value.zfill(4)
+        elif name=='trim_3':
+            # trim to 3 characters
+            return value[:3]
+        elif name=='trim_4':
+            # trim to 4 characters
+            return value[:4]
             
         return value

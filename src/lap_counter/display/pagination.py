@@ -68,6 +68,14 @@ class PaginationManager:
         key = actions[0].get('text', 'unknown')
         
         with self.lock:
+            if should_reset:
+                logging.info("PaginationManager: should_reset received. Resetting hardware board and state cache.")
+                # We do NOT clear self.active_results here because we want to keep 
+                # paginating athletes that are still within their display time.
+                self.board.reset(strong=True)
+                self.last_display_state = [None] * self.total_slots
+                self.scroll_offset = 0
+
             # Remove previous result for this athlete if it exists
             self.active_results = [r for r in self.active_results if r.key != key]
             
@@ -112,21 +120,20 @@ class PaginationManager:
                     self.scroll_offset = 0
                     continue
 
-                # 2. Scrolling logic
-                if len(self.active_results) <= self.total_slots:
-                    # No scrolling needed if we can fit everyone
-                    if self.scroll_offset != 0 or needs_paint:
-                        self.scroll_offset = 0
-                        self._paint()
-                else:
-                    # Rotate every 2 seconds
-                    if (now - self.last_scroll_time) >= self.refresh_interval:
+                # 2. Refresh and Pagination logic
+                is_scrolling = len(self.active_results) > self.total_slots
+                time_for_refresh = (now - self.last_scroll_time) >= self.refresh_interval
+                
+                if needs_paint or time_for_refresh:
+                    if is_scrolling:
+                        # Rotate to next page/athlete
                         self.scroll_offset = (self.scroll_offset + 1) % len(self.active_results)
-                        self.last_scroll_time = now
-                        self._paint()
-                    elif needs_paint:
-                        # Repaint to reflect expired entries
-                        self._paint()
+                    else:
+                        # Static display, keep offset at 0
+                        self.scroll_offset = 0
+                        
+                    self.last_scroll_time = now
+                    self._paint()
 
     def _paint(self):
         """
@@ -178,9 +185,10 @@ class PaginationManager:
                         final_y = 8
                     
                     if state == "":
-                        # Clear this cell by sending an empty string with cell width
+                        # Clear this cell by sending spaces with cell width
                         logging.info(f"Cell Clear: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start}")
-                        self.board.send_text("", row=row_letter, col=col_start, reset=False, client=client, width=self.cell_width)
+                        clear_text = " " * self.cell_width
+                        self.board.send_text(clear_text, row=row_letter,y=final_y, col=col_start, reset=False, client=client, width=self.cell_width)
                     else:
                         # Calculate index in active_results
                         idx = (self.scroll_offset + i) % num_athletes
@@ -206,7 +214,7 @@ class PaginationManager:
                                 if 0 <= rel_col + j < len(cell_buffer):
                                     cell_buffer[rel_col + j] = char
                         
-                        cell_text = "".join(cell_buffer).rstrip()
+                        cell_text = "".join(cell_buffer)
                         logging.info(f"Cell Update: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start} Text='{cell_text}'")
                         
                         # Even rows are inverted if configured

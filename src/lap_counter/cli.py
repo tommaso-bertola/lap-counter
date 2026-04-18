@@ -124,7 +124,7 @@ def main():
                     is_in_race = data_type == "inRace"
                     
                     # Process display updates based on configuration
-                    display_actions = config_handler.get_display_actions(obj) if config_handler.should_process_for_display(data_type) else []
+                    display_actions = config_handler.get_display_actions(obj) if config_handler.should_process_for_display(obj) else []
                     if display_actions:
                         if not is_in_race:
                             logging.info(f">>> {data_type.upper()} DETECTED <<<")
