@@ -15,9 +15,10 @@
         "close_threshold_seconds": 10.0,
         "max_age_seconds": 20.0,
         "refresh_interval_seconds": 1.0,
-        "n_display_rows": 2,
+        "n_display_rows": 1,
         "n_display_columns": 2,
-        "invert_even_rows": false
+        "invert_even_rows": false,
+        "special_mode": "active"
       }
     }
   },
@@ -38,9 +39,10 @@
     {
       "row": "A",
       "col": 0,
-      "field": "bib",
+      "field": "id",
       "transforms": [
-        "pad_bib_space_3"
+        "trim_4",
+        "capitalize"
       ]
     },
     {

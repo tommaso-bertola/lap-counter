@@ -4,10 +4,12 @@ import logging
 from datetime import datetime
 from typing import Any
 
+
 class MessageStore:
     """
     Handles saving received messages (JSON objects) to a directory.
     """
+
     def __init__(self, directory: str = "output"):
         self.directory = directory
         os.makedirs(self.directory, exist_ok=True)

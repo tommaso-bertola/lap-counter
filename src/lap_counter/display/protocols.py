@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class DisplayProtocol(ABC):
     """
     Abstract base class for display board protocols.
@@ -49,18 +50,18 @@ class AlphaProtocol(DisplayProtocol):
 
         # Pad text to width to clear existing content in the cell
         padded_text = text.ljust(w)
-        
+
         # Format the payload: Row ID + 'S' + Column ID (2 digits) + text
         payload = f"{r}S{c:02d}{padded_text}"
-        
+
         checksum = self._calculate_checksum(payload)
-        
+
         packet = bytearray()
         packet.append(self.ESC)
         packet.extend(payload.encode('ascii'))
         packet.append(self.ETX)
         packet.append(checksum)
-        
+
         return bytes(packet)
 
     def get_reset_packet(self, strong: bool = True) -> bytes:
@@ -72,15 +73,15 @@ class AlphaProtocol(DisplayProtocol):
         command = "r" if strong else "R"
         # Row identifier ' ' is broadcast for all rows
         payload = f" {command}"
-        
+
         checksum = self._calculate_checksum(payload)
-        
+
         packet = bytearray()
         packet.append(self.ESC)
         packet.extend(payload.encode('ascii'))
         packet.append(self.ETX)
         packet.append(checksum)
-        
+
         return bytes(packet)
 
 
@@ -95,11 +96,12 @@ class GraphProtocol(DisplayProtocol):
     # Font dimensions based on Microgate documentation (MicroTabLED_EN.md and graphic_protocol.md)
     # Mapping: FontID -> (Height, Column Width)
     FONT_DIMENSIONS = {
-        0: (15, 10), # Default (assumed same as Medium)
+        0: (15, 10),  # Default (assumed same as Large)
         1: (9, 7),   # Small (9x7 non-proportional)
-        2: (15, 10), # Medium Proportional (Height 15, Column width 10 per documentation)
-        3: (31, 21), # Large (31xVar, estimated width)
-        7: (16, 11), # Unicode (16xVar, estimated width)
+        # Large Proportional (Height 15, Column width 10 per documentation)
+        2: (15, 10),
+        3: (31, 21),  # Compact (31xVar, estimated width)
+        7: (16, 11),  # Unicode (16xVar, estimated width)
     }
 
     def __init__(self, default_font: int = 1, default_bin_op: int = 0):
@@ -132,15 +134,15 @@ class GraphProtocol(DisplayProtocol):
         packet.append(self.ESC)
         packet.append(self.ADDRESS)
         packet.append(ord(command))
-        
+
         packet.append(x & 0xFF)
         packet.append((x >> 8) & 0xFF)
         packet.append(y & 0xFF)
         packet.append((y >> 8) & 0xFF)
-        
+
         packet.append(bin_op)
         packet.append(font)
-        
+
         return packet
 
     def _finalize_packet(self, packet: bytearray) -> bytes:
@@ -159,7 +161,7 @@ class GraphProtocol(DisplayProtocol):
         """
         f = font if font is not None else self.default_font
         w = width if width is not None else 81
-        
+
         # If invert is requested, we use bin_op 1 (NOT) and pad the text
         if invert:
             bo = 1
@@ -167,27 +169,29 @@ class GraphProtocol(DisplayProtocol):
             text = text.ljust(w)
         else:
             bo = bin_op if bin_op is not None else self.default_bin_op
-        
+
         # Ensure text is not longer than width and total protocol limit (81)
         text = text[:min(w, 81)]
-        
+
         # Determine dimensions for the current font
-        base_font_id = f & 0x3F # Mask off alignment bits (128 right, 64 center)
-        height, width = self.FONT_DIMENSIONS.get(base_font_id, self.FONT_DIMENSIONS[0])
+        # Mask off alignment bits (128 right, 64 center)
+        base_font_id = f & 0x3F
+        height, width = self.FONT_DIMENSIONS.get(
+            base_font_id, self.FONT_DIMENSIONS[0])
         # remove the spacing between rows
         # height-=1
-        
+
         # Map row/col to x/y if needed
         final_x = x
         final_y = y
-        
+
         if final_x is None:
             col = kwargs.get('col', 0)
             try:
                 final_x = int(col) * width
             except (ValueError, TypeError):
                 final_x = 0
-                
+
         if final_y is None:
             row = kwargs.get('row', 'A')
             try:
@@ -201,16 +205,16 @@ class GraphProtocol(DisplayProtocol):
                 final_y = 0
 
         packet = self._build_header('S', final_x, final_y, bo, f)
-        
+
         # String <= 81 bytes (including null terminator if added)
         # We truncate to 80 if null terminator is needed to stay within 81 byte limit
         max_len = 80 if add_null_terminator else 81
         encoded_text = text.encode('ascii', errors='ignore')[:max_len]
         packet.extend(encoded_text)
-        
+
         if add_null_terminator:
             packet.append(0x00)
-            
+
         return self._finalize_packet(packet)
 
     def get_reset_packet(self, strong: bool = True, x: int = 0, y: int = 0, width: int = 96, height: int = 16, **kwargs) -> bytes:
@@ -221,12 +225,12 @@ class GraphProtocol(DisplayProtocol):
         # Command 'Q' (Reset Area)
         # Data area: X Dimension (2 bytes), Y Dimension (2 bytes)
         packet = self._build_header('Q', x, y, 0, 0)
-        
+
         packet.append(width & 0xFF)
         packet.append((width >> 8) & 0xFF)
         packet.append(height & 0xFF)
         packet.append((height >> 8) & 0xFF)
-        
+
         return self._finalize_packet(packet)
 
     def display_date(self, mode: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
@@ -268,9 +272,9 @@ class GraphProtocol(DisplayProtocol):
         f = font if font is not None else self.default_font
         bo = bin_op if bin_op is not None else self.default_bin_op
         packet = self._build_header('N', x, y, bo, f)
-        
+
         packet.append(display_format & 0xFF)
-        
+
         # 4 bytes delay, signed long (31 bit + symbol)
         try:
             delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
@@ -278,7 +282,7 @@ class GraphProtocol(DisplayProtocol):
             delay = max(min(delay, 2147483647), -2147483648)
             delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
         packet.extend(delay_bytes)
-        
+
         return self._finalize_packet(packet)
 
     def write_scrolling_string(self, text: str, width: int, delay: int, display_width: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
@@ -288,17 +292,17 @@ class GraphProtocol(DisplayProtocol):
         f = font if font is not None else self.default_font
         bo = bin_op if bin_op is not None else self.default_bin_op
         packet = self._build_header('O', x, y, bo, f)
-        
+
         packet.append(width & 0xFF)
         packet.append((width >> 8) & 0xFF)
         packet.append(delay & 0xFF)
         packet.append((delay >> 8) & 0xFF)
         packet.append(display_width & 0xFF)
-        
+
         encoded_text = text.encode('ascii', errors='ignore')[:255]
         packet.extend(encoded_text)
-        packet.append(0x00) # null terminator required
-        
+        packet.append(0x00)  # null terminator required
+
         return self._finalize_packet(packet)
 
     def deactivate_active_object(self, x: int, y: int) -> bytes:

@@ -3,10 +3,12 @@ import codecs
 import logging
 from typing import Generator, Any
 
+
 class JSONStreamParser:
     """
     Parses a stream of bytes and yields complete JSON objects.
     """
+
     def __init__(self):
         self.decoder = json.JSONDecoder()
         self.utf8_decoder = codecs.getincrementaldecoder("utf-8")()
@@ -26,7 +28,7 @@ class JSONStreamParser:
             self.buffer = self.buffer.lstrip()
             if not self.buffer:
                 break
-            
+
             try:
                 obj, index = self.decoder.raw_decode(self.buffer)
                 yield obj
@@ -36,5 +38,5 @@ class JSONStreamParser:
                 break
             except Exception as e:
                 logging.error(f"Unexpected error during parsing: {e}")
-                self.buffer = "" # Clear buffer on error
+                self.buffer = ""  # Clear buffer on error
                 break

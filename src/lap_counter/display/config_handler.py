@@ -2,12 +2,15 @@ import json
 import logging
 from typing import Dict, Any, List
 
+
 class DisplayConfigHandler:
     """
     Handles display board configuration and data transformation.
     """
+
     def __init__(self, config_path: str):
-        logging.info(f"Initializing DisplayConfigHandler with config path: {config_path}")
+        logging.info(
+            f"Initializing DisplayConfigHandler with config path: {config_path}")
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -16,7 +19,8 @@ class DisplayConfigHandler:
             with open(self.config_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            logging.error(f"Failed to load display configuration from {self.config_path}: {e}")
+            logging.error(
+                f"Failed to load display configuration from {self.config_path}: {e}")
             return {}
 
     @property
@@ -49,21 +53,21 @@ class DisplayConfigHandler:
         data_type = message.get("dataType", "DATA")
         settings_key = f"{data_type}_settings"
         settings = self.config.get(settings_key, {})
-        
+
         # Check if display processing is enabled for this data type
         if not settings.get("process_for_display", True):
             return False
-            
+
         # Apply display filter if configured and enabled
         filter_cfg = settings.get("display_filter")
         if filter_cfg and filter_cfg.get("enabled", False):
             field = filter_cfg.get("field", "display")
             expected_value = filter_cfg.get("value", "True")
-            
+
             # If the field is missing or does not match the expected value, filter it out
             if message.get(field) != expected_value:
                 return False
-                
+
         return True
 
     def get_display_actions(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -77,22 +81,23 @@ class DisplayConfigHandler:
 
         actions = []
         rules = self.config[data_type]
-        
+
         for rule in rules:
             field_name = rule.get("field")
             value = str(message.get(field_name, ""))
-            
+
             # Apply transforms
             transforms = rule.get("transforms", [])
             for transform_name in transforms:
                 value = self._apply_transform(transform_name, value, message)
-            
+
             actions.append({
                 "text": value,
+                "field": field_name,
                 "row": rule.get("row", "A"),
                 "col": rule.get("col", 0)
             })
-            
+
         return actions
 
     def _apply_transform(self, name: str, value: str, message: Dict[str, Any]) -> str:
@@ -101,34 +106,40 @@ class DisplayConfigHandler:
         """
         if name == "strip_bib_prefix":
             return value.replace("BIB:", "").strip()
-        
+
         elif name == "append_mod_if_no_entra":
             mod = str(message.get("Mod", ""))
             # If the msg field does not contain "<-Entra", append the Mod value
             if "<-Entra" not in value:
                 return f"{value} {mod}".strip()
             return value
-        
+
         elif name == "do_not_transform":
             return value
-        
-        elif name=='pad_bib_space_4':
+
+        elif name == 'pad_bib_space_4':
             # add spaces to the left until length is 4
             return value.rjust(4)
-        elif name=='pad_bib_space_3':
+        elif name == 'pad_bib_space_3':
             # add spaces to the left until length is 3
             return value.rjust(3)
-        elif name=='pad_bib_zero_3':
+        elif name == 'pad_bib_zero_3':
             # add zeros to the left until length is 4
             return value.zfill(3)
-        elif name=='pad_bib_zero_4':
+        elif name == 'pad_bib_zero_4':
             # add zeros to the left until length is 4
             return value.zfill(4)
-        elif name=='trim_3':
+        elif name == 'trim_3':
             # trim to 3 characters
             return value[:3]
-        elif name=='trim_4':
+        elif name == 'trim_4':
             # trim to 4 characters
             return value[:4]
-            
+        elif name == 'to_lower':
+            return value.lower()
+        elif name == 'to_upper':
+            return value.upper()
+        elif name == 'capitalize':
+            return value.capitalize()
+
         return value

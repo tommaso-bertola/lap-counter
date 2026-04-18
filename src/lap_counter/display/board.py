@@ -3,21 +3,28 @@ from typing import Any
 from lap_counter.network.client import TCPClient
 from lap_counter.display.protocols import DisplayProtocol, AlphaProtocol, GraphProtocol
 
+
 def _format_packet(packet: bytes) -> str:
     """Convert a byte packet into a human-readable string."""
     res = []
     for b in packet:
-        if b == 0x1b: res.append("<ESC>")
-        elif b == 0x03: res.append("<ETX>")
-        elif 32 <= b <= 126: res.append(chr(b))
-        else: res.append(f"<{b:02X}>")
+        if b == 0x1b:
+            res.append("<ESC>")
+        elif b == 0x03:
+            res.append("<ETX>")
+        elif 32 <= b <= 126:
+            res.append(chr(b))
+        else:
+            res.append(f"<{b:02X}>")
     return "".join(res)
+
 
 class DisplayBoard:
     """
     Higher-level class for managing communication with a display board.
     Takes a protocol (ALPHA/GRAPH) and handles sending messages.
     """
+
     def __init__(self, ip: str, port: int, protocol: DisplayProtocol):
         self.ip = ip
         self.port = port
@@ -28,11 +35,13 @@ class DisplayBoard:
         try:
             packet = self.protocol.get_reset_packet(strong=strong)
             if client:
-                logging.info(f"Sending reset packet (persistent) to {self.ip}:{self.port}")
+                logging.info(
+                    f"Sending reset packet (persistent) to {self.ip}:{self.port}")
                 client.send(packet)
             else:
                 with TCPClient(self.ip, self.port) as new_client:
-                    logging.info(f"Sending reset packet to {self.ip}:{self.port}")
+                    logging.info(
+                        f"Sending reset packet to {self.ip}:{self.port}")
                     new_client.send(packet)
         except Exception as e:
             logging.error(f"Error resetting display board: {e}")
@@ -44,15 +53,16 @@ class DisplayBoard:
             if reset:
                 # Clear the whole board with a hard reset
                 self.reset(strong=True, client=client)
-            
+
             # Send the new text
             packet = self.protocol.format_text(text, **kwargs)
             row = kwargs.get('row', 'A')
             col = kwargs.get('col', 0)
             clean_text = "".join(c for c in text if c.isprintable()).strip()
-            
+
             if client:
-                logging.info(f"Packet (persistent): [R:{row} C:{col}] \"{clean_text}\"")
+                logging.info(
+                    f"Packet (persistent): [R:{row} C:{col}] \"{clean_text}\"")
                 client.send(packet)
             else:
                 with TCPClient(self.ip, self.port) as new_client:
