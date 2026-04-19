@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lap-counter"
-version = "0.3.0"
+version = "0.4.0"
 description = "Listen to Wiclax passing events and drive a Microgate display board."
 readme = "README.md"
 requires-python = ">=3.10"

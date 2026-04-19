@@ -105,3 +105,10 @@ Iif([Giri] % 4 = 0,
 '-')
 ```
 
+
+
+Required fields in Wiclax:
+- `n_laps`: numeric field to count the number of laps for each athlete, e.g. `Giri` in the example formula above.
+- `id`: unique identifier for each athlete, e.g. `bib` field in Wiclax. or name
+- `msg`: field to inform athlete of progress: go to exercise station, how many laps completed
+- `display`: if you want to display. Critera to be defined in Wiclax

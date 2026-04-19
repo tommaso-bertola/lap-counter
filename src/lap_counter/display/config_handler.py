@@ -26,48 +26,48 @@ class DisplayConfigHandler:
     @property
     def reset_before_send(self) -> bool:
         """Returns True if the display should be reset before sending new data."""
-        return self.config.get("display", {}).get("settings", {}).get("reset_before_send", True)
+        return self.config.get("hardware", {}).get("rendering", {}).get("auto_reset", True)
 
     @property
-    def network_config(self) -> Dict[str, Any]:
-        """Returns the network configuration."""
-        return self.config.get("network", {"host": "127.0.0.1", "port": 1234})
+    def source_config(self) -> Dict[str, Any]:
+        """Returns the source network configuration."""
+        return self.config.get("source", {}).get("connection", {"host": "127.0.0.1", "port": 1234})
 
     @property
     def pagination_config(self) -> Dict[str, Any]:
         """Returns the pagination settings."""
-        return self.config.get("display", {}).get("settings", {}).get("pagination", {})
+        return self.config.get("hardware", {}).get("pagination", {})
 
     @property
-    def display_config(self) -> Dict[str, Any]:
-        """Returns the display configuration."""
-        return self.config.get("display", {"ip": "127.0.0.1", "port": 4422})
+    def hardware_config(self) -> Dict[str, Any]:
+        """Returns the hardware/display connection configuration."""
+        return self.config.get("hardware", {}).get("connection", {"ip": "127.0.0.1", "port": 4422})
 
     def should_save_to_disk(self, data_type: str) -> bool:
         """Returns True if the message should be saved to disk based on its type."""
-        settings_key = f"{data_type}_settings"
-        return self.config.get(settings_key, {}).get("save_to_disk", True)
+        type_cfg = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        return type_cfg.get("storage", {}).get("save_to_disk", True)
 
     def should_process_for_display(self, message: Dict[str, Any]) -> bool:
         """Returns True if the message should be processed for display based on its type and filter."""
         data_type = message.get("dataType", "DATA")
-        settings_key = f"{data_type}_settings"
-        settings = self.config.get(settings_key, {})
+        type_cfg = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        display_cfg = type_cfg.get("display", {})
 
         # Check if display processing is enabled for this data type
-        if not settings.get("process_for_display", True):
+        if not display_cfg.get("enabled", True):
             logging.debug(f"Display processing disabled for dataType: {data_type}")
             return False
 
         # Apply display filter if configured and enabled
-        filter_cfg = settings.get("display_filter")
+        filter_cfg = display_cfg.get("filter")
         if filter_cfg and filter_cfg.get("enabled", False):
             field = filter_cfg.get("field", "display")
             expected_value = filter_cfg.get("value", "True")
 
             # If the field is missing or does not match the expected value, filter it out
             if message.get(field) != expected_value:
-                logging.debug(f"Passing filtered out.")
+                logging.debug(f"Message filtered out by display filter.")
                 return False
 
         logging.debug(f"Message passed display filter.")
@@ -79,13 +79,14 @@ class DisplayConfigHandler:
         based on the configuration.
         """
         data_type = message.get("dataType")
-        if not data_type or data_type not in self.config:
+        if not data_type:
             return []
 
-        actions = []
-        rules = self.config[data_type]
+        rules = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        layout = rules.get("layout", [])
 
-        for rule in rules:
+        actions = []
+        for rule in layout:
             field_name = rule.get("field")
             value = str(message.get(field_name, ""))
 

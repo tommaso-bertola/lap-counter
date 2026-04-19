@@ -10,7 +10,7 @@ from lap_counter.parsing.json_stream import JSONStreamParser
 from lap_counter.storage.disk import MessageStore
 from lap_counter.display.board import DisplayBoard
 from lap_counter.display.config_handler import DisplayConfigHandler
-from lap_counter.display.protocols import AlphaProtocol, GraphProtocol
+from lap_counter.display.protocols import GraphProtocol
 from lap_counter.display.manager import make_display_manager
 
 # Connection defaults
@@ -18,7 +18,7 @@ DEFAULT_HOST = "192.168.1.12"
 DEFAULT_PORT = 1234
 DEFAULT_DISPLAY_IP = "192.168.1.12"
 DEFAULT_DISPLAY_PORT = 4422
-DEFAULT_PROTOCOL = "alpha"
+DEFAULT_PROTOCOL = "graph"
 
 
 def _default_user_config_path() -> Path:
@@ -93,35 +93,29 @@ def main():
     config_handler = DisplayConfigHandler(config_path=resolve_config_path())
 
     # Get configuration with environment variable overrides
-    net_cfg = config_handler.network_config
-    disp_cfg = config_handler.display_config
+    source_cfg = config_handler.source_config
+    hw_cfg = config_handler.hardware_config
+    # Full hardware block for pagination settings
+    hw_block = config_handler.config.get("hardware", {})
 
-    HOST = os.environ.get("TCP_HOST", net_cfg.get("host", DEFAULT_HOST))
-    PORT = int(os.environ.get("TCP_PORT", net_cfg.get("port", DEFAULT_PORT)))
+    HOST = os.environ.get("TCP_HOST", source_cfg.get("host", DEFAULT_HOST))
+    PORT = int(os.environ.get("TCP_PORT", source_cfg.get("port", DEFAULT_PORT)))
 
     DISPLAY_IP = os.environ.get(
-        "DISPLAY_IP", disp_cfg.get("ip", DEFAULT_DISPLAY_IP))
+        "DISPLAY_IP", hw_cfg.get("ip", DEFAULT_DISPLAY_IP))
     DISPLAY_PORT = int(os.environ.get(
-        "DISPLAY_PORT", disp_cfg.get("port", DEFAULT_DISPLAY_PORT)))
+        "DISPLAY_PORT", hw_cfg.get("port", DEFAULT_DISPLAY_PORT)))
 
-    protocol_type = os.environ.get(
-        "DISPLAY_PROTOCOL", disp_cfg.get("protocol", DEFAULT_PROTOCOL))
-    if protocol_type == "alpha":
-        protocol = AlphaProtocol()
-    elif protocol_type == "graph":
-        font_size = os.environ.get(
-            "DISPLAY_FONT_SIZE", disp_cfg.get("default_font", 1))
-        protocol = GraphProtocol(default_font=font_size)
-    else:
-        raise ValueError(
-            f"Unknown protocol type: {protocol_type}. Allowed: alpha, graph")
+    font_size = os.environ.get(
+        "DISPLAY_FONT_SIZE", hw_block.get("rendering", {}).get("font", 1))
+    protocol = GraphProtocol(default_font=font_size)
 
     parser = JSONStreamParser()
     store = MessageStore(directory="output")
     display_board = DisplayBoard(
         ip=DISPLAY_IP, port=DISPLAY_PORT, protocol=protocol)
     display_manager = make_display_manager(
-        display_board, config=disp_cfg.get("settings", {}))
+        display_board, config=hw_block)
 
     try:
         # Connect to the data source

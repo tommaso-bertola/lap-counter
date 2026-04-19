@@ -3,6 +3,7 @@ import threading
 import logging
 from typing import List, Dict, Any, Optional
 from lap_counter.display.board import DisplayBoard
+from lap_counter.network.client import TCPClient
 
 
 class AthleteResult:
@@ -18,42 +19,64 @@ class AthleteResult:
 class PaginationManager:
     """
     Dedicated module for display pagination.
-    Supports both ALPHA and GRAPH protocols by using unified row/col syntax.
+    Supports the GRAPH protocol with a special layout when 2 columns are used.
     """
 
     def __init__(self, board: DisplayBoard, config: Dict[str, Any]):
         self.board = board
+        self.n_cols =2
 
         # Load pagination settings
         pag_cfg = config.get("pagination", {})
-        self.close_threshold = pag_cfg.get("close_threshold_seconds", 10.0)
-        self.max_age = pag_cfg.get("max_age_seconds", 15.0)
-        self.refresh_interval = pag_cfg.get("refresh_interval_seconds", 2.0)
-        self.n_rows = pag_cfg.get("n_display_rows", 2)
-        self.n_cols = pag_cfg.get("n_display_columns", 1)
-        self.invert_even_rows = pag_cfg.get("invert_even_rows", True)
-        self.special_mode = pag_cfg.get("special_mode", "inactive")
-        self.offset_pagination = pag_cfg.get("offset_pagination", 1)
+        timing_cfg = pag_cfg.get("timing", {})
+        self.max_age = timing_cfg.get("max_age_seconds", 15.0)
+        self.refresh_interval = timing_cfg.get("refresh_rate_seconds", 2.0)
+        self.n_rows = pag_cfg.get("n_rows", 2)
+        self.offset_pagination = pag_cfg.get("step", 1)
 
-        # Calculate layout dimensions dynamically
-        protocol_name = getattr(board.protocol, "__class__", "").__name__
-        if "Alpha" in protocol_name:
-            self.board_width = 45  # Standard ALPHA width in characters
-            self.board_height_px = 16  # Not strictly used for ALPHA
-        else:
-            # Graph board dimension is in pixels. User board is 96x16 pixels.
-            # We must convert pixels to characters based on the active font.
-            self.board_width_px = 96
-            self.board_height_px = 16
-            font_id = getattr(board.protocol, "default_font", 1)
-            # FONT_DIMENSIONS: FontID -> (Height, Column Width)
-            font_dims = getattr(
-                board.protocol, "FONT_DIMENSIONS", {0: (15, 10)})
-            _, font_width = font_dims.get(font_id & 0x3F, font_dims.get(0))
-            self.board_width = self.board_width_px // font_width
+        # Graph board dimension is in pixels. User board is 96x16 pixels.
+        # We must convert pixels to characters based on the active font.
+        self.board_width_px = 96
+        self.board_height_px = 16
+        font_id = getattr(board.protocol, "default_font", 1)
+        # FONT_DIMENSIONS: FontID -> (Height, Column Width)
+        font_dims = getattr(
+            board.protocol, "FONT_DIMENSIONS", {0: (15, 10)})
+        _, font_width = font_dims.get(font_id & 0x3F, font_dims.get(0))
+        self.board_width = self.board_width_px // font_width
 
         self.cell_width = self.board_width // self.n_cols
         self.total_slots = self.n_rows * self.n_cols
+
+        default_font = getattr(board.protocol, "default_font", 1)
+        font_type = "small" if default_font == 1 else "large"
+        font_height = 9 if font_type == "small" else 16
+
+        if font_type == "large":
+            self.logical_rows = self.n_rows
+            self.y_offsets = [r * 17 for r in range(self.logical_rows)]
+            self.bib_font = 3
+            self.bib_right_font = 3 | 128
+            self.msg_font = 2 | 64
+        else:
+            if self.n_rows == 1:
+                self.logical_rows = 1
+                self.y_offsets = [2]
+            else:
+                total_height = self.n_rows * 17 - 1
+                self.logical_rows = total_height // font_height
+                if self.logical_rows <= 1:
+                    self.y_offsets = [2]
+                else:
+                    spacing = (total_height - (self.logical_rows *
+                                               font_height)) / (self.logical_rows - 1)
+                    self.y_offsets = [
+                        int(round(i * (font_height + spacing))) for i in range(self.logical_rows)]
+            self.bib_font = 1
+            self.bib_right_font = 1 | 128
+            self.msg_font = 1 | 64
+
+        self.total_slots = self.logical_rows * 2
 
         self.active_results: List[AthleteResult] = []
         self.lock = threading.Lock()
@@ -100,11 +123,7 @@ class PaginationManager:
             self.last_scroll_time = time.time()
 
             # Immediate repaint
-            if self.special_mode == "active":
-                self._paint_special()
-            else:
-                # pass
-                self._paint()
+            self._paint_special()
 
     def stop(self):
         self._stop_event.set()
@@ -154,10 +173,7 @@ class PaginationManager:
 
                     self.last_scroll_time = now
 
-                    if self.special_mode == "active":
-                        self._paint_special()
-                    else:
-                        self._paint()
+                    self._paint_special()
 
     def _paint_special(self):
         """
@@ -173,10 +189,7 @@ class PaginationManager:
 
         num_athletes = len(self.active_results)
 
-        if self.n_cols != 2:
-            raise ValueError("Special mode only supports 2 columns")
-
-        total_slots = self.n_rows * 2
+        total_slots = self.total_slots
         new_state = []
         athletes_to_draw = []
 
@@ -200,7 +213,6 @@ class PaginationManager:
         self.last_display_state[:total_slots] = new_state
 
         try:
-            from lap_counter.network.client import TCPClient
             with TCPClient(self.board.ip, self.board.port) as client:
 
                 # 5. Reset to the whole board before redrawing
@@ -214,8 +226,8 @@ class PaginationManager:
                             return str(action.get('text', ''))
                     return " "
 
-                for r in range(self.n_rows):
-                    y_offset = r * 17
+                for r in range(self.logical_rows):
+                    y_offset = self.y_offsets[r]
 
                     ath1 = athletes_to_draw[r * 2]
                     ath2 = athletes_to_draw[r * 2 + 1]
@@ -230,10 +242,10 @@ class PaginationManager:
                     msg1 = get_field_text(ath1, "msg")
                     msg2 = get_field_text(ath2, "msg")
 
-                    # 1. First bib printed in font 3 from 0,y
+                    # 1. First bib printed from x=0
                     if ath1:
                         self.board.send_text(
-                            bib1, x=0, y=y_offset, font=3, reset=False, client=client)
+                            bib1, x=0, y=y_offset, font=self.bib_font, reset=False, client=client)
 
                     # 2. Reset area from x=32 to end of board (w=64) on this row
                     # if hasattr(self.board.protocol, 'get_reset_packet'):
@@ -241,113 +253,17 @@ class PaginationManager:
                     #         strong=True, x=32, y=y_offset, width=64, height=16)
                     #     client.send(packet)
 
-                    # 3. Second bib in font 3 from x=96 right aligned
+                    # 3. Second bib right aligned
                     if ath2:
                         self.board.send_text(
-                            bib2, x=96, y=y_offset, font=3 | 128, reset=False, client=client)
+                            bib2, x=96, y=y_offset, font=self.bib_right_font, reset=False, client=client)
 
                     # 4. Center msg info
                     center_msg = f"{msg1} {msg2}"
                     if center_msg:
                         # 'center' alignment in Graph protocol is bit 6 (64)
                         self.board.send_text(
-                            center_msg, x=48, y=y_offset, font=2 | 64, reset=False, client=client)
+                            center_msg, x=48, y=y_offset, font=self.msg_font, reset=False, client=client)
 
         except Exception as e:
             logging.error(f"PaginationManager paint_special error: {e}")
-
-    def _paint(self):
-        """
-        Renders the current window of results to the board.
-        Only sends updates if content actually changed.
-        """
-        num_athletes = len(self.active_results)
-        current_view_states = []
-
-        # Map each cell (row, col) to an athlete or empty state (Row-major)
-        for r in range(self.n_rows):
-            for c in range(self.n_cols):
-                # Calculate slot index in flat state list
-                slot_idx = c + r * self.n_cols
-
-                if slot_idx < num_athletes:
-                    # Wrap around for scrolling
-                    idx = (self.scroll_offset + slot_idx) % num_athletes
-                    athlete = self.active_results[idx]
-                    state = f"{athlete.key}_{athlete.arrival_time}"
-                else:
-                    state = ""  # Empty cell
-
-                current_view_states.append(state)
-
-        # Perform the actual update cell by cell using a single connection
-        try:
-            from lap_counter.network.client import TCPClient
-            with TCPClient(self.board.ip, self.board.port) as client:
-                for i, state in enumerate(current_view_states):
-                    if state == self.last_display_state[i]:
-                        continue  # Skip unchanged cells
-
-                    # Determine row and col from current layout (row-major)
-                    r = i // self.n_cols
-                    c = i % self.n_cols
-
-                    row_letter = chr(ord('A') + r)
-                    if c != 0:
-                        col_start = c * self.cell_width + 1
-                    else:
-                        col_start = c * self.cell_width
-
-                    # Special handling for row position on small boards (e.g. 16px high)
-                    # If we have 2 rows and the board is 16px high, Row B (r=1)
-                    # should start at y=7 instead of y=9 to fit the 9px height.
-                    final_y = None
-                    if self.board_height_px == 16 and self.n_rows == 2 and r == 1:
-                        final_y = 8
-
-                    if state == "":
-                        # Clear this cell by sending spaces with cell width
-                        logging.info(
-                            f"Cell Clear: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start}")
-                        clear_text = " " * self.cell_width
-                        self.board.send_text(clear_text, row=row_letter, y=final_y,
-                                             col=col_start, reset=False, client=client, width=self.cell_width)
-                    else:
-                        # Calculate index in active_results
-                        idx = (self.scroll_offset + i) % num_athletes
-                        athlete = self.active_results[idx]
-
-                        # Assemble cell text from actions.
-                        # We merge all actions for one athlete into a buffer sized for the cell.
-                        cell_buffer = list(" " * self.cell_width)
-                        for action in athlete.actions:
-                            text = str(action.get('text', ''))
-                            try:
-                                # Relative col position within the cell
-                                # Note: athlete.actions usually have absolute col but here we treat
-                                # them as relative to the starting col of the cell if they were
-                                # configured for a single-column layout.
-                                # However, if the user configures specific cols, they might overlap.
-                                # We'll assume the configuration is meant for a single column (0-40).
-                                rel_col = int(action.get('col', 0))
-                            except (ValueError, TypeError):
-                                rel_col = 0
-
-                            for j, char in enumerate(text):
-                                if 0 <= rel_col + j < len(cell_buffer):
-                                    cell_buffer[rel_col + j] = char
-
-                        cell_text = "".join(cell_buffer)
-                        logging.info(
-                            f"Cell Update: Row={row_letter} Y={final_y if final_y is not None else 'auto'} Col={col_start} Text='{cell_text}'")
-
-                        # Even rows are inverted if configured
-                        is_even_row = (r % 2 == 1) and self.invert_even_rows
-
-                        self.board.send_text(cell_text, row=row_letter, y=final_y, col=col_start,
-                                             reset=False, client=client, invert=is_even_row, width=self.cell_width)
-
-                    self.last_display_state[i] = state
-
-        except Exception as e:
-            logging.error(f"PaginationManager paint error: {e}")

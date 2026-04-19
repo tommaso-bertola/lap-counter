@@ -1,58 +1,67 @@
 {
-  "network": {
-    "host": "192.168.1.12",
-    "port": 1234
+  "source": {
+    "connection": {
+      "host": "192.168.1.12",
+      "port": 1234
+    }
   },
-  "display": {
-    "ip": "192.168.0.123",
-    "port": 21967,
-    "protocol": "graph",
-    "default_font": 1,
-    "settings": {
-      "reset_before_send": false,
-      "manager_mode": "pagination",
-      "pagination": {
-        "offset_pagination": 2,
-        "close_threshold_seconds": 10.0,
-        "max_age_seconds": 20.0,
-        "refresh_interval_seconds": 1.0,
-        "n_display_rows": 1,
-        "n_display_columns": 2,
-        "invert_even_rows": false,
-        "special_mode": "active"
+  "hardware": {
+    "connection": {
+      "ip": "192.168.0.123",
+      "port": 21967
+    },
+    "rendering": {
+      "font": 1,
+      "auto_reset": true
+    },
+    "pagination": {
+      "step": 1,
+      "n_rows": 2,
+      "timing": {
+        "max_age_seconds": 30.0,
+        "arrival_window_seconds": 10.0,
+        "refresh_rate_seconds": 1.0
       }
     }
   },
-  "inRace_settings": {
-    "save_to_disk": false,
-    "process_for_display": false
-  },
-  "passing_settings": {
-    "save_to_disk": false,
-    "process_for_display": true,
-    "display_filter": {
-      "enabled": true,
-      "field": "display",
-      "value": "True"
+  "processing": {
+    "rules": {
+      "passing": {
+        "storage": {
+          "save_to_disk": false
+        },
+        "display": {
+          "enabled": true,
+          "filter": {
+            "enabled": true,
+            "field": "display",
+            "value": "True"
+          }
+        },
+        "layout": [
+          {
+            "field": "id",
+            "transforms": [
+              "trim_4",
+              "capitalize"
+            ]
+          },
+          {
+            "field": "msg",
+            "transforms": [
+              "do_not_transform"
+            ]
+          }
+        ]
+      },
+      "inRace": {
+        "storage": {
+          "save_to_disk": false
+        },
+        "display": {
+          "enabled": false
+        }
+      }
     }
-  },
-  "passing": [
-    {
-      "row": "A",
-      "col": 0,
-      "field": "id",
-      "transforms": [
-        "trim_4",
-        "capitalize"
-      ]
-    },
-    {
-      "row": "A",
-      "col": 4,
-      "field": "msg",
-      "transforms": [
-        "do_not_transform"
-      ]
-    }
-  ]
+  }
 }
