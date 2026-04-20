@@ -26,6 +26,7 @@ dependencies = []
 
 [project.scripts]
 lap-counter = "lap_counter.cli:main"
+manual-lap-counter = "lap_counter.cli2:main"
 
 [project.urls]
 Homepage = "https://github.com/tommasobertola/lap-counter"

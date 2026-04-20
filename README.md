@@ -36,7 +36,18 @@ Upgrade when new versions are released:
 To run the utility after installing via pip, simply run:
 `lap-counter`
 
-> Note: add the `config.json` file to the current working directory or set the `LAP_COUNTER_CONFIG` environment variable to the absolute path of the config file if you want to use a custom configuration. Otherwise, the utility will look for a user config file in the OS user config path and create it from the bundled default if it does not exist.
+> Note: add the `config.json` file to the current working directory, or pass a custom config path with `--config /absolute/or/relative/path/to/config.json`.
+
+## From wheel file
+
+1. Download the latest wheel file (`.whl`) from the [GitHub releases page](https://github.com/tommaso-bertola/lap-counter/releases)
+2. Install it using pip:
+   `pip install /path/to/lap-counter-*.whl`
+
+To run the utility after installing from a wheel:
+`lap-counter`
+
+> Note: add the `config.json` file to the current working directory, or pass a custom config path with `--config /absolute/or/relative/path/to/config.json`.
 
 ## Run from source
 
@@ -56,25 +67,16 @@ Then run:
 
 # Configuration file location and priority
 
-The app now supports packaged execution with a user-writable config file.
-
 At startup, configuration is resolved in this order:
 
-1. `LAP_COUNTER_CONFIG` environment variable (absolute path recommended)
+1. `--config` command line argument
 2. local `config.json` in the current working directory
-3. OS user config path (auto-created from packaged defaults if missing)
 
-## macOS path
-
-When installed as a package on macOS, edit this file:
-
-`~/Library/Application Support/lap-counter/config.json`
-
-If it does not exist, the app creates it automatically on first run using the bundled default configuration.
+If no valid file is found, the app exits with an error.
 
 ## Example override
 
-`LAP_COUNTER_CONFIG=/absolute/path/to/config.json lap-counter`
+`lap-counter --config /absolute/path/to/config.json`
 
 # Usage task list
 

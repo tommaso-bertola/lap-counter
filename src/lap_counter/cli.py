@@ -1,10 +1,10 @@
+import argparse
 import os
 import pprint
 import subprocess
 import logging
 import platform
 from pathlib import Path
-from importlib import resources
 from lap_counter.network.client import TCPClient
 from lap_counter.parsing.json_stream import JSONStreamParser
 from lap_counter.storage.disk import MessageStore
@@ -21,48 +21,33 @@ DEFAULT_DISPLAY_PORT = 4422
 DEFAULT_PROTOCOL = "graph"
 
 
-def _default_user_config_path() -> Path:
-    system = platform.system()
-    if system == "Darwin":
-        base_dir = Path.home() / "Library" / "Application Support"
-    elif system == "Windows":
-        base_dir = Path(os.environ.get("APPDATA", str(
-            Path.home() / "AppData" / "Roaming")))
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Lap counter listener")
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        help="Path to the config JSON file. If omitted, ./config.json is used.",
+    )
+    return parser.parse_args()
+
+
+def resolve_config_path(config_path_arg: str | None) -> tuple[str, str]:
+    if config_path_arg:
+        config_path = Path(config_path_arg).expanduser()
+        source = "--config argument"
     else:
-        base_dir = Path(os.environ.get(
-            "XDG_CONFIG_HOME", str(Path.home() / ".config")))
-    return base_dir / "lap-counter" / "config.json"
+        config_path = Path("config.json")
+        source = "current working directory"
 
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Configuration file not found: {config_path}. "
+            "Use --config /path/to/config.json or place config.json in the current working directory."
+        )
 
-def _bootstrap_user_config(target_path: Path) -> bool:
-    try:
-        default_content = resources.files("lap_counter.display").joinpath(
-            "default_config.json").read_text(encoding="utf-8")
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(default_content, encoding="utf-8")
-        return True
-    except Exception as e:
-        logging.error(f"Could not create default config at {target_path}: {e}")
-        return False
+    config_path = config_path.resolve()
 
-
-def resolve_config_path() -> str:
-    env_path = os.environ.get("LAP_COUNTER_CONFIG")
-    if env_path:
-        return env_path
-
-    local_path = Path("config.json")
-    if local_path.exists():
-        return str(local_path)
-
-    user_path = _default_user_config_path()
-    if not user_path.exists() and _bootstrap_user_config(user_path):
-        logging.info(f"Created default config at {user_path}")
-
-    if user_path.exists():
-        return str(user_path)
-
-    return "config.json"
+    return str(config_path), source
 
 
 def setup_logging():
@@ -89,8 +74,19 @@ def play_sound():
 def main():
     setup_logging()
 
+    args = parse_args()
+
+    try:
+        config_path, config_source = resolve_config_path(args.config_path)
+    except FileNotFoundError as e:
+        logging.error(str(e))
+        return
+
+    print(f"Loaded config (absolute path): {config_path}")
+    logging.info(f"Using configuration from {config_source}: {config_path}")
+
     # Initialize components
-    config_handler = DisplayConfigHandler(config_path=resolve_config_path())
+    config_handler = DisplayConfigHandler(config_path=config_path)
 
     # Get configuration with environment variable overrides
     source_cfg = config_handler.source_config
