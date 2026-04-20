@@ -27,7 +27,6 @@ This is where the logical list of athletes becomes actual text on the hardware:
 1.  **Windowing**: It picks the $N$ athletes starting from the current `scroll_offset`.
 2.  **Diffing**: It compares the new "intended state" with the `last_display_state`. If nothing changed, it cancels the update to save bandwidth.
 3.  **Buffering**: It merges multiple small text blocks into a single 80-character row string.
-4.  **Formatting**: It automatically applies `invert=True` to even rows (visual zebra-striping).
 
 ---
 
@@ -56,8 +55,7 @@ graph TD
         K --> L
         I --> L
         L -- Changed --> M[Merge Actions to Row String]
-        M --> N[Apply Inversion if Even Row]
-        N --> O[Send to Display Board]
+        M --> O[Send to Display Board]
     end
 ```
 
