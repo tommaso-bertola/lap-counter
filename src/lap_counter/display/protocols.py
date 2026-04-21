@@ -6,12 +6,12 @@ class DisplayProtocol(ABC):
     Abstract base class for display board protocols.
     """
     @abstractmethod
-    def format_text(self, text: str, **kwargs) -> bytes:
+    def format_text(self, text: str, delay: bool = False, **kwargs) -> bytes:
         """Format the text according to the protocol."""
         pass
 
     @abstractmethod
-    def get_reset_packet(self, strong: bool = True) -> bytes:
+    def get_reset_packet(self, strong: bool = True, delay: bool = False) -> bytes:
         """Get the packet for resetting/clearing the display."""
         pass
 
@@ -40,7 +40,7 @@ class AlphaProtocol(DisplayProtocol):
             checksum = (checksum + byte_val) & 127
         return checksum
 
-    def format_text(self, text: str, row: str = None, col: int = None, width: int = None, **kwargs) -> bytes:
+    def format_text(self, text: str, row: str = None, col: int = None, width: int = None, delay: bool = False, **kwargs) -> bytes:
         """
         Formats the message for the Microtab LED display using ALPHA protocol.
         """
@@ -64,7 +64,7 @@ class AlphaProtocol(DisplayProtocol):
 
         return bytes(packet)
 
-    def get_reset_packet(self, strong: bool = True) -> bytes:
+    def get_reset_packet(self, strong: bool = True, delay: bool = False) -> bytes:
         """
         Get the packet for resetting/clearing the display according to ALPHA protocol.
         'r' is Strong Reset, 'R' is Weak Reset.
@@ -103,9 +103,11 @@ class GraphProtocol(DisplayProtocol):
         7: (16, 11),  # Unicode (16xVar, estimated width)
     }
 
-    def __init__(self, default_font: int = 1, default_bin_op: int = 0):
+    def __init__(self, default_font: int = 1, default_bin_op: int = 0, width: int = 96, height: int = 16):
         self.default_font = default_font
         self.default_bin_op = default_bin_op
+        self.width = width
+        self.height = height
 
     def _calculate_checksum(self, packet: bytearray) -> int:
         """
@@ -125,7 +127,7 @@ class GraphProtocol(DisplayProtocol):
             checksum = (checksum + byte_val) & 127
         return checksum
 
-    def _build_header(self, command: str, x: int, y: int, bin_op: int, font: int) -> bytearray:
+    def _build_header(self, command: str, x: int, y: int, bin_op: int, font: int, delay: bool = False) -> bytearray:
         """
         Builds the standard GRAPH protocol header.
         """
@@ -139,6 +141,8 @@ class GraphProtocol(DisplayProtocol):
         packet.append(y & 0xFF)
         packet.append((y >> 8) & 0xFF)
 
+        if delay:
+            bin_op |= 0x80
         packet.append(bin_op)
         packet.append(font)
 
@@ -153,7 +157,7 @@ class GraphProtocol(DisplayProtocol):
         packet.append(checksum)
         return bytes(packet)
 
-    def format_text(self, text: str, x: int = None, y: int = None, font: int = None, bin_op: int = None, add_null_terminator: bool = True, invert: bool = False, width: int = None, **kwargs) -> bytes:
+    def format_text(self, text: str, x: int = None, y: int = None, font: int = None, bin_op: int = None, add_null_terminator: bool = True, invert: bool = False, width: int = None, delay: bool = False, **kwargs) -> bytes:
         """
         Formats a Write Fixed String command ('S') for the GRAPH protocol.
         Maps 'row' and 'col' from kwargs to x and y based on the selected font's dimensions.
@@ -203,7 +207,7 @@ class GraphProtocol(DisplayProtocol):
             except (ValueError, TypeError):
                 final_y = 0
 
-        packet = self._build_header('S', final_x, final_y, bo, f)
+        packet = self._build_header('S', final_x, final_y, bo, f, delay=delay)
 
         # String <= 81 bytes (including null terminator if added)
         # We truncate to 80 if null terminator is needed to stay within 81 byte limit
@@ -216,45 +220,47 @@ class GraphProtocol(DisplayProtocol):
 
         return self._finalize_packet(packet)
 
-    def get_reset_packet(self, strong: bool = True, x: int = 0, y: int = 0, width: int = 96, height: int = 16, **kwargs) -> bytes:
+    def get_reset_packet(self, strong: bool = True, delay: bool = False) -> bytes:
         """
-        Get the packet for resetting/clearing the display.
+        Get the packet for resetting/clearing the whole display.
+        """
+        return self.reset_area(0, 0, self.width, self.height, delay=delay)
+
+    def reset_area(self, x: int, y: int, width: int, height: int, delay: bool = False) -> bytes:
+        """
+        Get the packet for resetting/clearing a specific area.
         Uses the native GRAPH protocol 'Q' (Reset Area) command.
         """
-        # Command 'Q' (Reset Area)
-        # Data area: X Dimension (2 bytes), Y Dimension (2 bytes)
-        packet = self._build_header('Q', x, y, 0, 0)
-
+        packet = self._build_header('Q', x, y, 0, 0, delay=delay)
         packet.append(width & 0xFF)
         packet.append((width >> 8) & 0xFF)
         packet.append(height & 0xFF)
         packet.append((height >> 8) & 0xFF)
-
         return self._finalize_packet(packet)
 
-    def display_date(self, mode: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+    def display_date(self, mode: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None, delay: bool = False) -> bytes:
         """
         Display Date - Active Object ('A')
         mode: 1 = DD/MM/YY; 2 = DD MM YY
         """
         f = font if font is not None else self.default_font
         bo = bin_op if bin_op is not None else self.default_bin_op
-        packet = self._build_header('A', x, y, bo, f)
+        packet = self._build_header('A', x, y, bo, f, delay=delay)
         packet.append(mode & 0xFF)
         return self._finalize_packet(packet)
 
-    def select_font(self, font: int, x: int = 0, y: int = 0, bin_op: int = 0) -> bytes:
+    def select_font(self, font: int, x: int = 0, y: int = 0, bin_op: int = 0, delay: bool = False) -> bytes:
         """
         Select Font ('F')
         """
-        packet = self._build_header('F', x, y, bin_op, font)
+        packet = self._build_header('F', x, y, bin_op, font, delay=delay)
         return self._finalize_packet(packet)
 
-    def insert_images(self, image_data: bytes, width: int, height: int, x: int = 0, y: int = 0, bin_op: int = 0) -> bytes:
+    def insert_images(self, image_data: bytes, width: int, height: int, x: int = 0, y: int = 0, bin_op: int = 0, delay: bool = False) -> bytes:
         """
         Insert Images ('I')
         """
-        packet = self._build_header('I', x, y, bin_op, 0)
+        packet = self._build_header('I', x, y, bin_op, 0, delay=delay)
         packet.append(width & 0xFF)
         packet.append((width >> 8) & 0xFF)
         packet.append(height & 0xFF)
@@ -262,40 +268,40 @@ class GraphProtocol(DisplayProtocol):
         packet.extend(image_data)
         return self._finalize_packet(packet)
 
-    def display_internal_clock(self, display_format: int, delay: int = 0, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+    def display_internal_clock(self, display_format: int, clock_delay: int = 0, x: int = 0, y: int = 0, font: int = None, bin_op: int = None, delay: bool = False) -> bytes:
         """
         Internal Clock Display (RTC) - Active Object ('N')
         display_format: 1=HH:MM:SS, 2=MM:SS, 3=HH:MM(24h), 4=HH:MM(12h)
-        delay: Advance/delay in thousandths
+        clock_delay: Advance/delay in thousandths
         """
         f = font if font is not None else self.default_font
         bo = bin_op if bin_op is not None else self.default_bin_op
-        packet = self._build_header('N', x, y, bo, f)
+        packet = self._build_header('N', x, y, bo, f, delay=delay)
 
         packet.append(display_format & 0xFF)
 
         # 4 bytes delay, signed long (31 bit + symbol)
         try:
-            delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
+            delay_bytes = clock_delay.to_bytes(4, byteorder='little', signed=True)
         except OverflowError:
-            delay = max(min(delay, 2147483647), -2147483648)
-            delay_bytes = delay.to_bytes(4, byteorder='little', signed=True)
+            clock_delay = max(min(clock_delay, 2147483647), -2147483648)
+            delay_bytes = clock_delay.to_bytes(4, byteorder='little', signed=True)
         packet.extend(delay_bytes)
 
         return self._finalize_packet(packet)
 
-    def write_scrolling_string(self, text: str, width: int, delay: int, display_width: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None) -> bytes:
+    def write_scrolling_string(self, text: str, width: int, scroll_delay: int, display_width: int, x: int = 0, y: int = 0, font: int = None, bin_op: int = None, delay: bool = False) -> bytes:
         """
         Write Scrolling String - Active Object ('O')
         """
         f = font if font is not None else self.default_font
         bo = bin_op if bin_op is not None else self.default_bin_op
-        packet = self._build_header('O', x, y, bo, f)
+        packet = self._build_header('O', x, y, bo, f, delay=delay)
 
         packet.append(width & 0xFF)
         packet.append((width >> 8) & 0xFF)
-        packet.append(delay & 0xFF)
-        packet.append((delay >> 8) & 0xFF)
+        packet.append(scroll_delay & 0xFF)
+        packet.append((scroll_delay >> 8) & 0xFF)
         packet.append(display_width & 0xFF)
 
         encoded_text = text.encode('ascii', errors='ignore')[:255]
@@ -304,9 +310,9 @@ class GraphProtocol(DisplayProtocol):
 
         return self._finalize_packet(packet)
 
-    def deactivate_active_object(self, x: int, y: int) -> bytes:
+    def deactivate_active_object(self, x: int, y: int, delay: bool = False) -> bytes:
         """
         Deactivating an active object ('t')
         """
-        packet = self._build_header('t', x, y, 0, 0)
+        packet = self._build_header('t', x, y, 0, 0, delay=delay)
         return self._finalize_packet(packet)

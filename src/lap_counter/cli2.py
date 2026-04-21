@@ -3,7 +3,7 @@ cli2.py — Interactive GRAPH protocol tester for the display board.
 
 Usage:
     python -m lap_counter.cli2                         # uses config.json defaults
-    python -m lap_counter.cli2 --ip 192.168.0.123 --port 21967
+    python -m lap_counter.cli2 --ip 192.168.0.125 --port 21967
 """
 
 import argparse
@@ -17,7 +17,7 @@ from lap_counter.display.protocols import GraphProtocol
 from lap_counter.network.client import TCPClient
 
 # ── Defaults ────────────────────────────────────────────────────────────────
-DEFAULT_IP = "192.168.0.123"
+DEFAULT_IP = "192.168.0.125"
 DEFAULT_PORT = 21967
 
 FONT_TABLE = {
@@ -29,17 +29,24 @@ FONT_TABLE = {
 }
 
 
-def _load_config_defaults() -> tuple[str, int]:
-    """Try to pull ip/port from a local config.json."""
+def _load_config_defaults() -> tuple[str, int, int, int]:
+    """Try to pull connection and board dimensions from a local config.json."""
     cfg_path = Path("config.json")
     if cfg_path.exists():
         try:
             cfg = json.loads(cfg_path.read_text())
-            d = cfg.get("display", {})
-            return d.get("ip", DEFAULT_IP), int(d.get("port", DEFAULT_PORT))
+            hw = cfg.get("hardware", {})
+            conn = hw.get("connection", {})
+            board = hw.get("board_dimension", {"width": 96, "height": 16})
+            return (
+                conn.get("ip", DEFAULT_IP),
+                int(conn.get("port", DEFAULT_PORT)),
+                int(board.get("width", 96)),
+                int(board.get("height", 16))
+            )
         except Exception:
             pass
-    return DEFAULT_IP, DEFAULT_PORT
+    return DEFAULT_IP, DEFAULT_PORT, 96, 16
 
 
 def _print_fonts():
@@ -76,13 +83,14 @@ def cmd_send_text(board: DisplayBoard, proto: GraphProtocol):
     y = _ask_int("Y (px)", 0)
     invert = _ask_str("Invert? (y/n)", "n").lower().startswith("y")
     center = _ask_str("Center align? (y/n)", "n").lower().startswith("y")
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     if center:
         font |= 64  # Graph Protocol: bit 6 (64) enables center alignment
 
     print(
-        f"\n  → Sending \"{text}\" font={font} x={x} y={y} inv={invert} center={center}")
-    board.send_text(text, reset=False, font=font, x=x, y=y, invert=invert)
+        f"\n  → Sending \"{text}\" font={font} x={x} y={y} inv={invert} center={center} delay={delay}")
+    board.send_text(text, reset=False, font=font, x=x, y=y, invert=invert, delay=delay)
     print("  ✓ sent\n")
 
 
@@ -95,14 +103,15 @@ def cmd_send_row_col(board: DisplayBoard, proto: GraphProtocol):
     col = _ask_int("Col", 0)
     invert = _ask_str("Invert? (y/n)", "n").lower().startswith("y")
     center = _ask_str("Center align? (y/n)", "n").lower().startswith("y")
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     if center:
         font |= 64  # Graph Protocol: bit 6 (64) enables center alignment
 
     print(
-        f"\n  → Sending \"{text}\" font={font} row={row} col={col} inv={invert} center={center}")
+        f"\n  → Sending \"{text}\" font={font} row={row} col={col} inv={invert} center={center} delay={delay}")
     board.send_text(text, reset=False, font=font,
-                    row=row, col=col, invert=invert)
+                    row=row, col=col, invert=invert, delay=delay)
     print("  ✓ sent\n")
 
 
@@ -111,9 +120,10 @@ def cmd_font_showcase(board: DisplayBoard, proto: GraphProtocol):
     text = _ask_str("Text to show in all fonts", "Abc123")
     reset_first = _ask_str("Reset board first? (y/n)",
                            "y").lower().startswith("y")
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     if reset_first:
-        board.reset(strong=True)
+        board.reset(strong=True, delay=delay)
         print("  ✓ board reset")
 
     y_cursor = 0
@@ -121,7 +131,7 @@ def cmd_font_showcase(board: DisplayBoard, proto: GraphProtocol):
         height = GraphProtocol.FONT_DIMENSIONS.get(fid, (15, 10))[0]
         label = f"F{fid}: {text}"
         print(f"  → font {fid} ({desc})  y={y_cursor}")
-        board.send_text(label, reset=False, font=fid, x=0, y=y_cursor)
+        board.send_text(label, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
         y_cursor += height + 1  # +1 px gap
 
     print("  ✓ all fonts sent\n")
@@ -129,7 +139,8 @@ def cmd_font_showcase(board: DisplayBoard, proto: GraphProtocol):
 
 def cmd_reset(board: DisplayBoard, _proto: GraphProtocol):
     """Send a reset/clear command."""
-    board.reset(strong=True)
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
+    board.reset(strong=True, delay=delay)
     print("  ✓ board reset\n")
 
 
@@ -140,16 +151,17 @@ def cmd_multiline(board: DisplayBoard, proto: GraphProtocol):
     n_lines = _ask_int("Number of lines", 2)
     reset_first = _ask_str("Reset board first? (y/n)",
                            "y").lower().startswith("y")
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     if reset_first:
-        board.reset(strong=True)
+        board.reset(strong=True, delay=delay)
 
     height = GraphProtocol.FONT_DIMENSIONS.get(font, (15, 10))[0]
     for i in range(n_lines):
         text = _ask_str(f"  Line {i} text", f"Line {i}")
         y = i * height
         print(f"    → \"{text}\" y={y}")
-        board.send_text(text, reset=False, font=font, x=0, y=y)
+        board.send_text(text, reset=False, font=font, x=0, y=y, delay=delay)
 
     print("  ✓ all lines sent\n")
 
@@ -162,9 +174,10 @@ def cmd_narrow_test(board: DisplayBoard, proto: GraphProtocol):
     ref = _ask_str("Wide ref string", wide)
     reset_first = _ask_str("Reset board first? (y/n)",
                            "y").lower().startswith("y")
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     if reset_first:
-        board.reset(strong=True)
+        board.reset(strong=True, delay=delay)
         print("  ✓ board reset")
 
     y_cursor = 0
@@ -172,10 +185,10 @@ def cmd_narrow_test(board: DisplayBoard, proto: GraphProtocol):
         h, w = GraphProtocol.FONT_DIMENSIONS.get(fid, (15, 10))
         # row 1: narrow chars, row 2: wide chars for comparison
         print(f"  → font {fid} ({desc})  y={y_cursor}  narrow")
-        board.send_text(sample, reset=False, font=fid, x=0, y=y_cursor)
+        board.send_text(sample, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
         y_cursor += h + 1
         print(f"  → font {fid} ({desc})  y={y_cursor}  wide")
-        board.send_text(ref, reset=False, font=fid, x=0, y=y_cursor)
+        board.send_text(ref, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
         y_cursor += h + 1
 
     print("  ✓ narrow test sent\n")
@@ -186,17 +199,20 @@ def cmd_scrolling_text(board: DisplayBoard, proto: GraphProtocol):
     _print_fonts()
     font = _ask_int("Font ID", proto.default_font)
     text = _ask_str("Text", "This is a scrolling text sample ... ")
+    x = _ask_int("X (px)", 0)
     y = _ask_int("Y (px)", 0)
     width = _ask_int("Text area width (px)", 96)
-    delay = _ask_int("Delay/speed (ms)", 3)
+    speed_delay = _ask_int("Delay/speed (ms)", 3)
+    delay_update = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
-    print(f"\n  → Sending scrolling text \"{text[:20]}...\" font={font} y={y}")
+    print(f"\n  → Sending scrolling text \"{text[:20]}...\" font={font} x={x} y={y} delay_update={delay_update}")
     packet = proto.write_scrolling_string(
         text=text,
         width=width,
-        delay=delay,
+        scroll_delay=speed_delay,
         display_width=width,
-        x=0, y=y, font=font
+        x=x, y=y, font=font,
+        delay=delay_update
     )
 
     with TCPClient(board.ip, board.port) as client:
@@ -208,11 +224,12 @@ def cmd_reset_area(board: DisplayBoard, proto: GraphProtocol):
     """Reset a specific pixel area of the board."""
     x = _ask_int("Start X (px)", 0)
     y = _ask_int("Start Y (px)", 0)
-    w = _ask_int("Width (px)", 96)
-    h = _ask_int("Height (px)", 16)
+    w = _ask_int("Width (px)", proto.width)
+    h = _ask_int("Height (px)", proto.height)
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
-    print(f"\n  → Sending area reset x={x} y={y} w={w} h={h}")
-    packet = proto.get_reset_packet(x=x, y=y, width=w, height=h)
+    print(f"\n  → Sending area reset x={x} y={y} w={w} h={h} delay={delay}")
+    packet = proto.reset_area(x=x, y=y, width=w, height=h, delay=delay)
     with TCPClient(board.ip, board.port) as client:
         client.send(packet)
     print("  ✓ area reset\n")
@@ -233,7 +250,7 @@ MENU = [
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main():
-    cfg_ip, cfg_port = _load_config_defaults()
+    cfg_ip, cfg_port, cfg_w, cfg_h = _load_config_defaults()
 
     parser = argparse.ArgumentParser(
         description="GRAPH protocol display tester")
@@ -247,7 +264,7 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(message)s")
 
-    proto = GraphProtocol(default_font=args.font)
+    proto = GraphProtocol(default_font=args.font, width=cfg_w, height=cfg_h)
     board = DisplayBoard(ip=args.ip, port=args.port, protocol=proto)
 
     print(f"\n  Display: {args.ip}:{args.port}  |  Default font: {args.font}")

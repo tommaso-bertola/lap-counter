@@ -15,10 +15,10 @@ class DisplayBoard:
         self.port = port
         self.protocol = protocol
 
-    def reset(self, strong: bool = True, client: Any = None):
+    def reset(self, strong: bool = True, delay: bool = False, client: Any = None):
         """Hard reset the display board (clears everything)."""
         try:
-            packet = self.protocol.get_reset_packet(strong=strong)
+            packet = self.protocol.get_reset_packet(strong=strong, delay=delay)
             if client:
                 logging.info(
                     f"Sending reset packet (persistent) to {self.ip}:{self.port}")
@@ -32,15 +32,15 @@ class DisplayBoard:
             logging.error(f"Error resetting display board: {e}")
             raise
 
-    def send_text(self, text: str, reset: bool = True, client: Any = None, **kwargs):
+    def send_text(self, text: str, reset: bool = True, delay: bool = False, client: Any = None, **kwargs):
         """Send formatted text to the display board, optionally clearing it first."""
         try:
             if reset:
                 # Clear the whole board with a hard reset
-                self.reset(strong=True, client=client)
+                self.reset(strong=True, delay=delay, client=client)
 
             # Send the new text
-            packet = self.protocol.format_text(text, **kwargs)
+            packet = self.protocol.format_text(text, delay=delay, **kwargs)
             clean_text = "".join(c for c in text if c.isprintable()).strip()
 
             if client:

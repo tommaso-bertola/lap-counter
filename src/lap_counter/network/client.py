@@ -7,7 +7,7 @@ class TCPClient:
     A simple TCP client that handles connection and receiving data in chunks.
     """
 
-    def __init__(self, host: str, port: int, timeout: float = None):
+    def __init__(self, host: str, port: int, timeout: float = 10.0):
         self.host = host
         self.port = port
         self.timeout = timeout

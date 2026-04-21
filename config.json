@@ -1,14 +1,18 @@
 {
   "source": {
     "connection": {
-      "host": "192.168.1.12",
+      "host": "192.168.1.46",
       "port": 1234
     }
   },
   "hardware": {
     "connection": {
-      "ip": "192.168.0.123",
+      "ip": "192.168.0.125",
       "port": 21967
+    },
+    "board_dimension": {
+      "height": 32,
+      "width": 128
     },
     "rendering": {
       "font": 1,
@@ -41,7 +45,7 @@
           {
             "field": "id",
             "transforms": [
-              "trim_4",
+              "trim_7",
               "capitalize"
             ]
           },

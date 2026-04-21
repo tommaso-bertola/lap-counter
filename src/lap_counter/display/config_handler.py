@@ -39,6 +39,11 @@ class DisplayConfigHandler:
         return self.config.get("hardware", {}).get("pagination", {})
 
     @property
+    def board_config(self) -> Dict[str, Any]:
+        """Returns the physical board dimensions."""
+        return self.config.get("hardware", {}).get("board_dimension", {"height": 16, "width": 96})
+
+    @property
     def hardware_config(self) -> Dict[str, Any]:
         """Returns the hardware/display connection configuration."""
         return self.config.get("hardware", {}).get("connection", {"ip": "127.0.0.1", "port": 4422})
@@ -75,7 +80,7 @@ class DisplayConfigHandler:
 
     def get_display_actions(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Processes a message and returns a list of actions (text, row, col)
+        Processes a message and returns a list of actions (text)
         based on the configuration.
         """
         data_type = message.get("dataType")
@@ -89,6 +94,7 @@ class DisplayConfigHandler:
         for rule in layout:
             field_name = rule.get("field")
             value = str(message.get(field_name, ""))
+            bib_number = str(message.get("bib", ""))
 
             # Apply transforms
             transforms = rule.get("transforms", [])
@@ -98,8 +104,7 @@ class DisplayConfigHandler:
             actions.append({
                 "text": value,
                 "field": field_name,
-                "row": rule.get("row", "A"),
-                "col": rule.get("col", 0)
+                "bib": bib_number
             })
 
         return actions
@@ -136,6 +141,12 @@ class DisplayConfigHandler:
         elif name == 'trim_4':
             # trim to 4 characters
             return value[:4]
+        elif name == 'trim_6':
+            # trim to 4 characters
+            return value[:6]
+        elif name == 'trim_7':
+            # trim to 4 characters
+            return value[:7]
         elif name == 'to_lower':
             return value.lower()
         elif name == 'to_upper':

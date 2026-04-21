@@ -4,6 +4,7 @@ import pprint
 import subprocess
 import logging
 import platform
+import time
 from pathlib import Path
 from lap_counter.network.client import TCPClient
 from lap_counter.parsing.json_stream import JSONStreamParser
@@ -104,7 +105,12 @@ def main():
 
     font_size = os.environ.get(
         "DISPLAY_FONT_SIZE", hw_block.get("rendering", {}).get("font", 1))
-    protocol = GraphProtocol(default_font=font_size)
+    board_dim = config_handler.board_config
+    protocol = GraphProtocol(
+        default_font=font_size,
+        width=board_dim.get("width", 96),
+        height=board_dim.get("height", 16)
+    )
 
     parser = JSONStreamParser()
     store = MessageStore(directory="output")
@@ -113,59 +119,69 @@ def main():
     display_manager = make_display_manager(
         display_board, config=hw_block)
 
-    try:
-        # Connect to the data source
-        with TCPClient(HOST, PORT) as client:
-            logging.info(f"Listening for data on {HOST}:{PORT}")
+    while True:
+        try:
+            # Connect to the data source
+            with TCPClient(HOST, PORT) as client:
+                logging.info(f"Connected to data source at {HOST}:{PORT}")
 
-            for chunk in client.receive_chunks():
-                # Parse JSON messages from the incoming chunks
-                for obj in parser.feed(chunk):
+                for chunk in client.receive_chunks():
+                    # Parse JSON messages from the incoming chunks
+                    for obj in parser.feed(chunk):
 
-                    # Process data (quietly for "inRace" dataType)
-                    data_type = obj.get("dataType", "DATA")
-                    is_in_race = data_type == "inRace"
-
-                    # Process display updates based on configuration
-                    display_actions = config_handler.get_display_actions(
-                        obj) if config_handler.should_process_for_display(obj) else []
-                    if display_actions:
-                        if not is_in_race:
-                            logging.info(
-                                f">>> {data_type.upper()} DETECTED <<<")
-
-                        should_reset = config_handler.reset_before_send
-                        if not is_in_race:
-                            for action in display_actions:
+                        # Process data (quietly for "inRace" dataType)
+                        data_type = obj.get("dataType", "DATA")
+                        is_in_race = data_type == "inRace"
+                          
+                        # Process display updates based on configuration
+                        display_actions = config_handler.get_display_actions(
+                            obj) if config_handler.should_process_for_display(obj) else []
+                        if display_actions:
+                            if not is_in_race:
                                 logging.info(
-                                    f"Queueing to DisplayManager: {action} (Row: {action['row']}, Col: {action['col']}, Reset: {should_reset})")
-                        try:
-                            display_manager.show_message(
-                                display_actions, should_reset)
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to queue message to DisplayManager: {e}")
-                    elif data_type != "passing" and not is_in_race:
-                        logging.info(
-                            "Received data (no display rules applied):")
-                        pprint.pprint(obj)
+                                    f">>> {data_type.upper()} DETECTED <<<")
 
-                    # Store message on disk
-                    if config_handler.should_save_to_disk(data_type):
-                        store.save_message(obj)
+                            should_reset = config_handler.reset_before_send
+                            if not is_in_race:
+                                for action in display_actions:
+                                    logging.info(
+                                        f"Queueing to DisplayManager: {action} (Reset: {should_reset})")
+                            try:
+                                display_manager.show_message(
+                                    display_actions, should_reset)
+                            except Exception as e:
+                                logging.error(
+                                    f"Failed to queue message to DisplayManager: {e}")
+                        elif data_type != "passing" and not is_in_race:
+                            logging.info(
+                                "Received data (no display rules applied):")
+                            pprint.pprint(obj)
 
-                    # Feedback sound and separator (suppressed for "inRace")
-                    if not is_in_race:
-                        play_sound()
-                        logging.info("-" * 20)
+                        # Store message on disk
+                        if config_handler.should_save_to_disk(data_type):
+                            store.save_message(obj)
 
-    except KeyboardInterrupt:
-        logging.info("\nMain listener stopped by user.")
-    except Exception as e:
-        logging.error(f"Major error in main loop: {e}")
-    finally:
-        if 'display_manager' in locals():
-            display_manager.stop()
+                        # Feedback sound and separator (suppressed for "inRace")
+                        if not is_in_race:
+                            play_sound()
+                            logging.info("-" * 20)
+
+        except KeyboardInterrupt:
+            logging.info("\nMain listener stopped by user.")
+            break
+        except Exception as e:
+            logging.error(f"Error in main loop: {e}")
+            logging.info("Attempting to reconnect in 5 seconds...")
+            time.sleep(5)
+        finally:
+            if 'display_manager' in locals():
+                # We don't necessarily want to stop the display manager on every disconnect
+                # but if we are exiting the while loop (KeyboardInterrupt), it will be handled outside if needed.
+                # However, cli.py used to stop it in finally.
+                pass
+
+    if 'display_manager' in locals():
+        display_manager.stop()
 
 
 if __name__ == "__main__":

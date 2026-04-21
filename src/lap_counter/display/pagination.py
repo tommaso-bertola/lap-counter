@@ -16,6 +16,14 @@ class AthleteResult:
         return f"AthleteResult(key={self.key}, arrival_time={self.arrival_time}, actions={self.actions})"
 
 
+def get_field_text(athlete, field_name):
+    if not athlete:
+        return ""
+    for action in athlete.actions:
+        if action.get('field') == field_name:
+            return str(action.get('text', ''))
+    return ""
+
 class PaginationManager:
     """
     Dedicated module for display pagination.
@@ -34,10 +42,10 @@ class PaginationManager:
         self.n_rows = pag_cfg.get("n_rows", 2)
         self.offset_pagination = pag_cfg.get("step", 1)
 
-        # Graph board dimension is in pixels. User board is 96x16 pixels.
-        # We must convert pixels to characters based on the active font.
-        self.board_width_px = 96
-        self.board_height_px = 16
+        # Graph board dimension is in pixels.
+        board_cfg = config.get("board_dimension", {"height": 16, "width": 96})
+        self.board_width_px = board_cfg.get("width", 96)
+        self.board_height_px = board_cfg.get("height", 16)
         font_id = getattr(board.protocol, "default_font", 1)
         # FONT_DIMENSIONS: FontID -> (Height, Column Width)
         font_dims = getattr(
@@ -55,9 +63,6 @@ class PaginationManager:
         if font_type == "large":
             self.logical_rows = self.n_rows
             self.y_offsets = [r * 17 for r in range(self.logical_rows)]
-            self.bib_font = 3
-            self.bib_right_font = 3 | 128
-            self.msg_font = 2 | 64
         else:
             if self.n_rows == 1:
                 self.logical_rows = 1
@@ -72,9 +77,6 @@ class PaginationManager:
                                                font_height)) / (self.logical_rows - 1)
                     self.y_offsets = [
                         int(round(i * (font_height + spacing))) for i in range(self.logical_rows)]
-            self.bib_font = 1
-            self.bib_right_font = 1 | 128
-            self.msg_font = 1 | 64
 
         self.total_slots = self.logical_rows * 2
 
@@ -96,9 +98,12 @@ class PaginationManager:
         """
         if not actions:
             return
+        logging.debug(f"PaginationManager: received new result {actions}")
+        # Use the bib and name as the key for deduplication
+        name=actions[0].get('text', 'unknown')
+        bib=actions[0].get('bib', 'unknown')
+        key = bib  + name
 
-        # Use the first text field (bib) as the key for deduplication
-        key = actions[0].get('text', 'unknown')
 
         with self.lock:
             if should_reset:
@@ -106,7 +111,7 @@ class PaginationManager:
                     "PaginationManager: should_reset received. Resetting hardware board and state cache.")
                 # We do NOT clear self.active_results here because we want to keep
                 # paginating athletes that are still within their display time.
-                self.board.reset(strong=True)
+                self.board.reset(strong=True, delay=True)
                 self.last_display_state = [None] * self.total_slots
                 self.scroll_offset = 0
 
@@ -178,13 +183,6 @@ class PaginationManager:
     def _paint_special(self):
         """
         Special paint mode when n_rows > 0 and 2 columns are used.
-        Visualization per row:
-        1. first bib/name in font 3 compact from x=0
-        2. reset area from x=32 until end of board
-        3. second bib in font 3 compact from x=96 (right aligned)
-        4. msg info in center (string is center aligned)
-        5. on pagination, full reset first.
-        Gap between physical boards is 1 LED row.
         """
 
         num_athletes = len(self.active_results)
@@ -216,18 +214,11 @@ class PaginationManager:
             with TCPClient(self.board.ip, self.board.port) as client:
 
                 # 5. Reset to the whole board before redrawing
-                self.board.reset(strong=True, client=client)
+                self.board.reset(strong=True, client=client, delay=True)
 
-                def get_field_text(athlete, field_name):
-                    if not athlete:
-                        return " "
-                    for action in athlete.actions:
-                        if action.get('field') == field_name:
-                            return str(action.get('text', ''))
-                    return " "
-
+                y_offsets=[0,11,22]
                 for r in range(self.logical_rows):
-                    y_offset = self.y_offsets[r]
+                    y_offset = y_offsets[r]
 
                     ath1 = athletes_to_draw[r * 2]
                     ath2 = athletes_to_draw[r * 2 + 1]
@@ -236,34 +227,30 @@ class PaginationManager:
                         continue
 
                     # Fallback cleanly if the athlete object is None
-                    bib1 = get_field_text(ath1, "id")
-                    bib2 = get_field_text(ath2, "id")
+                    id1 = get_field_text(ath1, "id")
+                    id2 = get_field_text(ath2, "id")
 
-                    msg1 = get_field_text(ath1, "msg")
-                    msg2 = get_field_text(ath2, "msg")
+                    status1 = get_field_text(ath1, "msg")
+                    status2 = get_field_text(ath2, "msg")
 
                     # 1. First bib printed from x=0
                     if ath1:
                         self.board.send_text(
-                            bib1, x=0, y=y_offset, font=self.bib_font, reset=False, client=client)
+                            id1, x=10, y=y_offset, font=1, reset=False, client=client, delay=True)
+                        self.board.send_text(
+                            status1, x=0, y=y_offset, font=1, reset=False, client=client, delay=True)
 
-                    # 2. Reset area from x=32 to end of board (w=64) on this row
-                    # if hasattr(self.board.protocol, 'get_reset_packet'):
-                    #     packet = self.board.protocol.get_reset_packet(
-                    #         strong=True, x=32, y=y_offset, width=64, height=16)
-                    #     client.send(packet)
-
-                    # 3. Second bib right aligned
+                
                     if ath2:
                         self.board.send_text(
-                            bib2, x=96, y=y_offset, font=self.bib_right_font, reset=False, client=client)
-
-                    # 4. Center msg info
-                    center_msg = f"{msg1} {msg2}"
-                    if center_msg:
-                        # 'center' alignment in Graph protocol is bit 6 (64)
+                            id2, x=74, y=y_offset, font=1, reset=False, client=client, delay=True)
                         self.board.send_text(
-                            center_msg, x=48, y=y_offset, font=self.msg_font, reset=False, client=client)
+                            status2, x=64 , y=y_offset, font=1 , reset=False, client=client, delay=True)
+
+                    # this is needed to trigger the update of the board
+                self.board.send_text(
+                    "", x=0, y=0, font=1 , reset=False, client=client, delay=False)
+
 
         except Exception as e:
             logging.error(f"PaginationManager paint_special error: {e}")
