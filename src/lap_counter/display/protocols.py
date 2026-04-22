@@ -98,7 +98,7 @@ class GraphProtocol(DisplayProtocol):
     FONT_DIMENSIONS = {
         0: (15, 10),  # Default (assumed same as Large)
         1: (9, 7),   # Small (9x7 non-proportional)
-        2: (15, 10), # Large Proportional (Height 15, Column width 10)
+        2: (15, 10),  # Large Proportional (Height 15, Column width 10)
         3: (31, 21),  # Compact (31xVar, estimated width)
         7: (16, 11),  # Unicode (16xVar, estimated width)
     }
@@ -282,10 +282,12 @@ class GraphProtocol(DisplayProtocol):
 
         # 4 bytes delay, signed long (31 bit + symbol)
         try:
-            delay_bytes = clock_delay.to_bytes(4, byteorder='little', signed=True)
+            delay_bytes = clock_delay.to_bytes(
+                4, byteorder='little', signed=True)
         except OverflowError:
             clock_delay = max(min(clock_delay, 2147483647), -2147483648)
-            delay_bytes = clock_delay.to_bytes(4, byteorder='little', signed=True)
+            delay_bytes = clock_delay.to_bytes(
+                4, byteorder='little', signed=True)
         packet.extend(delay_bytes)
 
         return self._finalize_packet(packet)

@@ -1,3 +1,4 @@
+import logging
 import time
 import threading
 import logging
@@ -24,6 +25,7 @@ def get_field_text(athlete, field_name):
             return str(action.get('text', ''))
     return ""
 
+
 class PaginationManager:
     """
     Dedicated module for display pagination.
@@ -32,54 +34,72 @@ class PaginationManager:
 
     def __init__(self, board: DisplayBoard, config: Dict[str, Any]):
         self.board = board
-        self.n_cols =2
 
         # Load pagination settings
         pag_cfg = config.get("pagination", {})
         timing_cfg = pag_cfg.get("timing", {})
         self.max_age = timing_cfg.get("max_age_seconds", 15.0)
         self.refresh_interval = timing_cfg.get("refresh_rate_seconds", 2.0)
-        self.n_rows = pag_cfg.get("n_rows", 2)
+
+        dimensions = config.get("board_dimension", {})
+        self.board_height = dimensions.get("height", 32)
+        self.board_width = dimensions.get("width", 128)
+        self.n_vertical_boards = dimensions.get("n_vertical_boards", 1)
+        self.n_horizonal_boards = dimensions.get("n_horizonal_boards", 1)
+
+        self.total_height = self.board_height * self.n_vertical_boards
+        self.total_width = self.board_width * self.n_horizonal_boards
+
+        FONT_DIMENSIONS = {
+            1: (9, 7),
+            "small": (9, 7),
+            2: (15, 14),
+            "large": (15, 14)  # vertical, max horizontal width for fixed font
+        }
+        chosen_font = pag_cfg.get("font_size", 1)
+        logging.info(f"PaginationManager: chosen_font={chosen_font}")
+
+        self.font_y_dimension, self.font_x_dimension = FONT_DIMENSIONS.get(
+            chosen_font)
+
+        logging.info(
+            f"PaginationManager: font_y_dimension={self.font_y_dimension} font_x_dimension={self.font_x_dimension}")
+
+        self.n_logical_rows = self.total_height // (self.font_y_dimension + 1)
+        self.mid_point = self.total_width // 2
+        self.n_cols = 2
+        self.total_slots = self.n_logical_rows * self.n_cols
+        logging.info(
+            f"PaginationManager: total_slots={self.total_slots}: {self.n_logical_rows} rows x {self.n_cols} cols")
+
         self.offset_pagination = pag_cfg.get("step", 1)
+        logging.info(
+            f"PaginationManager: offset_pagination={self.offset_pagination}")
 
-        # Graph board dimension is in pixels.
-        board_cfg = config.get("board_dimension", {"height": 16, "width": 96})
-        self.board_width_px = board_cfg.get("width", 96)
-        self.board_height_px = board_cfg.get("height", 16)
-        font_id = getattr(board.protocol, "default_font", 1)
-        # FONT_DIMENSIONS: FontID -> (Height, Column Width)
-        font_dims = getattr(
-            board.protocol, "FONT_DIMENSIONS", {0: (15, 10)})
-        _, font_width = font_dims.get(font_id & 0x3F, font_dims.get(0))
-        self.board_width = self.board_width_px // font_width
+        self.y_offsets = [
+            i * (self.font_y_dimension + 2) for i in range(self.n_logical_rows)]
+        logging.info(
+            f"PaginationManager: y_offsets={self.y_offsets}")
 
-        self.cell_width = self.board_width // self.n_cols
-        self.total_slots = self.n_rows * self.n_cols
+        if self.font_y_dimension == 9:
+            self.athlete_font = 1
+            self.status_font = 1
+            self.vertical_padding_pixels = 0
+        elif self.font_y_dimension == 15:
+            self.athlete_font = 2
+            self.status_font = 5
+            self.vertical_padding_pixels = 0
+            # self.vertical_padding_pixels = self.font_y_dimension - 9
 
-        default_font = getattr(board.protocol, "default_font", 1)
-        font_type = "small" if default_font == 1 else "large"
-        font_height = 9 if font_type == "small" else 16
+        self.invert_background = int(
+            pag_cfg.get("invert_status_background", 0))
 
-        if font_type == "large":
-            self.logical_rows = self.n_rows
-            self.y_offsets = [r * 17 for r in range(self.logical_rows)]
-        else:
-            if self.n_rows == 1:
-                self.logical_rows = 1
-                self.y_offsets = [2]
-            else:
-                total_height = self.n_rows * 17 - 1
-                self.logical_rows = total_height // font_height
-                if self.logical_rows <= 1:
-                    self.y_offsets = [2]
-                else:
-                    spacing = (total_height - (self.logical_rows *
-                                               font_height)) / (self.logical_rows - 1)
-                    self.y_offsets = [
-                        int(round(i * (font_height + spacing))) for i in range(self.logical_rows)]
+        self.spacing_between_status_and_bib_leds = int(
+            pag_cfg.get("spacing_between_status_and_bib_leds", 2))
+        logging.info(
+            f"PaginationManager: spacing_between_status_and_bib_leds={self.spacing_between_status_and_bib_leds}")
 
-        self.total_slots = self.logical_rows * 2
-
+        # athlete results handling
         self.active_results: List[AthleteResult] = []
         self.lock = threading.Lock()
 
@@ -92,7 +112,7 @@ class PaginationManager:
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
-    def show_message(self, actions: List[Dict[str, Any]], should_reset: bool = False):
+    def show_message(self, actions: List[Dict[str, Any]]):
         """
         New result arrived. Put it on top and trigger immediate refresh.
         """
@@ -100,20 +120,15 @@ class PaginationManager:
             return
         logging.debug(f"PaginationManager: received new result {actions}")
         # Use the bib and name as the key for deduplication
-        name=actions[0].get('text', 'unknown')
-        bib=actions[0].get('bib', 'unknown')
-        key = bib  + name
-
+        name = actions[0].get('text', 'unknown')
+        bib = actions[0].get('bib', 'unknown')
+        key = bib + name
 
         with self.lock:
-            if should_reset:
-                logging.info(
-                    "PaginationManager: should_reset received. Resetting hardware board and state cache.")
-                # We do NOT clear self.active_results here because we want to keep
-                # paginating athletes that are still within their display time.
-                self.board.reset(strong=True, delay=True)
-                self.last_display_state = [None] * self.total_slots
-                self.scroll_offset = 0
+            logging.debug(f"PaginationManager: received new result {key}")
+            logging.debug(
+                f"PaginationManager: active_results={self.active_results}")
+            self.last_display_state = [None] * self.total_slots
 
             # Remove previous result for this athlete if it exists
             self.active_results = [
@@ -147,7 +162,7 @@ class PaginationManager:
             now = time.time()
 
             with self.lock:
-                # 1. Cleanup expired results (older than 15s)
+                # 1. Cleanup expired results (older than max_age_seconds)
                 original_count = len(self.active_results)
                 self.active_results = [r for r in self.active_results if (
                     now - r.arrival_time) < self.max_age]
@@ -213,18 +228,20 @@ class PaginationManager:
         try:
             with TCPClient(self.board.ip, self.board.port) as client:
 
+                logging.debug(
+                    f"PaginationManager: GOT THIS FAR")
+
                 # 5. Reset to the whole board before redrawing
                 self.board.reset(strong=True, client=client, delay=True)
 
-                y_offsets=[0,11,22]
-                for r in range(self.logical_rows):
-                    y_offset = y_offsets[r]
-
+                for r in range(self.n_logical_rows):
                     ath1 = athletes_to_draw[r * 2]
                     ath2 = athletes_to_draw[r * 2 + 1]
 
                     if not ath1 and not ath2:
                         continue
+
+                    y_offset = self.y_offsets[r]
 
                     # Fallback cleanly if the athlete object is None
                     id1 = get_field_text(ath1, "id")
@@ -234,23 +251,48 @@ class PaginationManager:
                     status2 = get_field_text(ath2, "msg")
 
                     # 1. First bib printed from x=0
-                    if ath1:
-                        self.board.send_text(
-                            id1, x=10, y=y_offset, font=1, reset=False, client=client, delay=True)
-                        self.board.send_text(
-                            status1, x=0, y=y_offset, font=1, reset=False, client=client, delay=True)
+                    self.board.send_text(
+                        status1,
+                        x=0,
+                        y=y_offset,
+                        font=self.status_font,
+                        reset=False,
+                        client=client,
+                        bin_op=self.invert_background,
+                        delay=True)
 
-                
-                    if ath2:
-                        self.board.send_text(
-                            id2, x=74, y=y_offset, font=1, reset=False, client=client, delay=True)
-                        self.board.send_text(
-                            status2, x=64 , y=y_offset, font=1 , reset=False, client=client, delay=True)
+                    self.board.send_text(
+                        id1,
+                        x=self.font_x_dimension + self.spacing_between_status_and_bib_leds,
+                        y=y_offset + self.vertical_padding_pixels,
+                        font=self.athlete_font,
+                        reset=False,
+                        client=client,
+                        delay=True)
 
-                    # this is needed to trigger the update of the board
+                    self.board.send_text(
+                        status2,
+                        x=self.mid_point,
+                        y=y_offset,
+                        font=self.status_font,
+                        reset=False,
+                        client=client,
+                        bin_op=self.invert_background,
+                        delay=True)
+
+                    self.board.send_text(
+                        id2,
+                        x=self.mid_point + self.font_x_dimension +
+                        self.spacing_between_status_and_bib_leds,
+                        y=y_offset + self.vertical_padding_pixels,
+                        font=self.athlete_font,
+                        reset=False,
+                        client=client,
+                        delay=True)
+
+                # this is needed to trigger the update of the board
                 self.board.send_text(
-                    "", x=0, y=0, font=1 , reset=False, client=client, delay=False)
-
+                    "", x=0, y=0, font=1, reset=False, client=client, delay=False)
 
         except Exception as e:
             logging.error(f"PaginationManager paint_special error: {e}")

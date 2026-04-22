@@ -7,20 +7,20 @@
   },
   "hardware": {
     "connection": {
-      "ip": "192.168.0.125",
+      "ip": "192.168.0.126",
       "port": 21967
     },
     "board_dimension": {
       "height": 32,
-      "width": 128
-    },
-    "rendering": {
-      "font": 1,
-      "auto_reset": true
+      "width": 128,
+      "n_vertical_boards": 1,
+      "n_horizonal_boards": 1
     },
     "pagination": {
+      "font_size": "large",
+      "invert_status_background": false,
+      "spacing_between_status_and_bib_leds": 2,
       "step": 1,
-      "n_rows": 2,
       "timing": {
         "max_age_seconds": 30.0,
         "refresh_rate_seconds": 1.0

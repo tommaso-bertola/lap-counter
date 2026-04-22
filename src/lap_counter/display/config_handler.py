@@ -24,11 +24,6 @@ class DisplayConfigHandler:
             return {}
 
     @property
-    def reset_before_send(self) -> bool:
-        """Returns True if the display should be reset before sending new data."""
-        return self.config.get("hardware", {}).get("rendering", {}).get("auto_reset", True)
-
-    @property
     def source_config(self) -> Dict[str, Any]:
         """Returns the source network configuration."""
         return self.config.get("source", {}).get("connection", {"host": "127.0.0.1", "port": 1234})
@@ -50,18 +45,21 @@ class DisplayConfigHandler:
 
     def should_save_to_disk(self, data_type: str) -> bool:
         """Returns True if the message should be saved to disk based on its type."""
-        type_cfg = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        type_cfg = self.config.get("processing", {}).get(
+            "rules", {}).get(data_type, {})
         return type_cfg.get("storage", {}).get("save_to_disk", True)
 
     def should_process_for_display(self, message: Dict[str, Any]) -> bool:
         """Returns True if the message should be processed for display based on its type and filter."""
         data_type = message.get("dataType", "DATA")
-        type_cfg = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        type_cfg = self.config.get("processing", {}).get(
+            "rules", {}).get(data_type, {})
         display_cfg = type_cfg.get("display", {})
 
         # Check if display processing is enabled for this data type
         if not display_cfg.get("enabled", True):
-            logging.debug(f"Display processing disabled for dataType: {data_type}")
+            logging.debug(
+                f"Display processing disabled for dataType: {data_type}")
             return False
 
         # Apply display filter if configured and enabled
@@ -87,7 +85,8 @@ class DisplayConfigHandler:
         if not data_type:
             return []
 
-        rules = self.config.get("processing", {}).get("rules", {}).get(data_type, {})
+        rules = self.config.get("processing", {}).get(
+            "rules", {}).get(data_type, {})
         layout = rules.get("layout", [])
 
         actions = []
@@ -141,6 +140,9 @@ class DisplayConfigHandler:
         elif name == 'trim_4':
             # trim to 4 characters
             return value[:4]
+        elif name == 'trim_5':
+            # trim to 5 characters
+            return value[:5]
         elif name == 'trim_6':
             # trim to 4 characters
             return value[:6]

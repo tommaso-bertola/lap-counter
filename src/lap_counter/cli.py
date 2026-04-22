@@ -132,7 +132,7 @@ def main():
                         # Process data (quietly for "inRace" dataType)
                         data_type = obj.get("dataType", "DATA")
                         is_in_race = data_type == "inRace"
-                          
+
                         # Process display updates based on configuration
                         display_actions = config_handler.get_display_actions(
                             obj) if config_handler.should_process_for_display(obj) else []
@@ -141,14 +141,12 @@ def main():
                                 logging.info(
                                     f">>> {data_type.upper()} DETECTED <<<")
 
-                            should_reset = config_handler.reset_before_send
                             if not is_in_race:
                                 for action in display_actions:
                                     logging.info(
-                                        f"Queueing to DisplayManager: {action} (Reset: {should_reset})")
+                                        f"Queueing to DisplayManager: {action}")
                             try:
-                                display_manager.show_message(
-                                    display_actions, should_reset)
+                                display_manager.show_message(display_actions)
                             except Exception as e:
                                 logging.error(
                                     f"Failed to queue message to DisplayManager: {e}")
