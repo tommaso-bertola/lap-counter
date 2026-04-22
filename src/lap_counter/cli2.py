@@ -215,7 +215,7 @@ def cmd_scrolling_text(board: DisplayBoard, proto: GraphProtocol):
         delay=delay_update
     )
 
-    with TCPClient(board.ip, board.port) as client:
+    with board.connection() as client:
         client.send(packet)
     print("  ✓ sent\n")
 
@@ -230,7 +230,7 @@ def cmd_reset_area(board: DisplayBoard, proto: GraphProtocol):
 
     print(f"\n  → Sending area reset x={x} y={y} w={w} h={h} delay={delay}")
     packet = proto.reset_area(x=x, y=y, width=w, height=h, delay=delay)
-    with TCPClient(board.ip, board.port) as client:
+    with board.connection() as client:
         client.send(packet)
     print("  ✓ area reset\n")
 
@@ -265,7 +265,13 @@ def main():
                         format="%(asctime)s [%(levelname)s] %(message)s")
 
     proto = GraphProtocol(default_font=args.font, width=cfg_w, height=cfg_h)
-    board = DisplayBoard(ip=args.ip, port=args.port, protocol=proto)
+    board = DisplayBoard(
+        ip=args.ip, 
+        port=args.port, 
+        protocol=proto,
+        board_width=cfg_w,
+        board_height=cfg_h
+    )
 
     print(f"\n  Display: {args.ip}:{args.port}  |  Default font: {args.font}")
     print("  ─────────────────────────────────────────────")

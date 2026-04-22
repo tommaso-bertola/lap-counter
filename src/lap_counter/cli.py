@@ -115,7 +115,14 @@ def main():
     parser = JSONStreamParser()
     store = MessageStore(directory="output")
     display_board = DisplayBoard(
-        ip=DISPLAY_IP, port=DISPLAY_PORT, protocol=protocol)
+        ip=DISPLAY_IP, 
+        port=DISPLAY_PORT, 
+        protocol=protocol,
+        board_width=board_dim.get("width", 128),
+        board_height=board_dim.get("height", 32),
+        n_vertical=board_dim.get("n_vertical_boards", 1),
+        n_horizontal=board_dim.get("n_horizonal_boards", 1)
+    )
     display_manager = PaginationManager(
         display_board, config={
             "pagination": pag_cfg,
