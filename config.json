@@ -15,16 +15,16 @@
       "width": 128,
       "n_vertical_boards": 1,
       "n_horizonal_boards": 1
-    },
-    "pagination": {
-      "font_size": "large",
-      "invert_status_background": false,
-      "spacing_between_status_and_bib_leds": 2,
-      "step": 1,
-      "timing": {
-        "max_age_seconds": 30.0,
-        "refresh_rate_seconds": 1.0
-      }
+    }
+  },
+  "pagination": {
+    "font_size": "small",
+    "invert_status_background": false,
+    "spacing_between_status_and_bib_leds": 2,
+    "step": 1,
+    "timing": {
+      "max_age_seconds": 30.0,
+      "refresh_rate_seconds": 1.0
     }
   },
   "processing": {

@@ -12,7 +12,7 @@ from lap_counter.storage.disk import MessageStore
 from lap_counter.display.board import DisplayBoard
 from lap_counter.display.config_handler import DisplayConfigHandler
 from lap_counter.display.protocols import GraphProtocol
-from lap_counter.display.manager import make_display_manager
+from lap_counter.display.pagination import PaginationManager
 
 # Connection defaults
 DEFAULT_HOST = "192.168.1.12"
@@ -92,8 +92,8 @@ def main():
     # Get configuration with environment variable overrides
     source_cfg = config_handler.source_config
     hw_cfg = config_handler.hardware_config
-    # Full hardware block for pagination settings
-    hw_block = config_handler.config.get("hardware", {})
+    pag_cfg = config_handler.pagination_config
+    board_dim = config_handler.board_config
 
     HOST = os.environ.get("TCP_HOST", source_cfg.get("host", DEFAULT_HOST))
     PORT = int(os.environ.get("TCP_PORT", source_cfg.get("port", DEFAULT_PORT)))
@@ -104,8 +104,8 @@ def main():
         "DISPLAY_PORT", hw_cfg.get("port", DEFAULT_DISPLAY_PORT)))
 
     font_size = os.environ.get(
-        "DISPLAY_FONT_SIZE", hw_block.get("rendering", {}).get("font", 1))
-    board_dim = config_handler.board_config
+        "DISPLAY_FONT_SIZE", pag_cfg.get("font_size", 1))
+
     protocol = GraphProtocol(
         default_font=font_size,
         width=board_dim.get("width", 96),
@@ -116,8 +116,11 @@ def main():
     store = MessageStore(directory="output")
     display_board = DisplayBoard(
         ip=DISPLAY_IP, port=DISPLAY_PORT, protocol=protocol)
-    display_manager = make_display_manager(
-        display_board, config=hw_block)
+    display_manager = PaginationManager(
+        display_board, config={
+            "pagination": pag_cfg,
+            "board_dimension": board_dim
+        })
 
     while True:
         try:

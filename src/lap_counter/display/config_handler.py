@@ -31,7 +31,7 @@ class DisplayConfigHandler:
     @property
     def pagination_config(self) -> Dict[str, Any]:
         """Returns the pagination settings."""
-        return self.config.get("hardware", {}).get("pagination", {})
+        return self.config.get("pagination", {})
 
     @property
     def board_config(self) -> Dict[str, Any]:
