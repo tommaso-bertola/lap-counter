@@ -90,7 +90,8 @@ def cmd_send_text(board: DisplayBoard, proto: GraphProtocol):
 
     print(
         f"\n  → Sending \"{text}\" font={font} x={x} y={y} inv={invert} center={center} delay={delay}")
-    board.send_text(text, reset=False, font=font, x=x, y=y, invert=invert, delay=delay)
+    board.send_text(text, reset=False, font=font, x=x,
+                    y=y, invert=invert, delay=delay)
     print("  ✓ sent\n")
 
 
@@ -111,7 +112,7 @@ def cmd_send_row_col(board: DisplayBoard, proto: GraphProtocol):
     print(
         f"\n  → Sending \"{text}\" font={font} row={row} col={col} inv={invert} center={center} delay={delay}")
     board.send_text(text, reset=False, font=font,
-                    row=row, col=col, invert=invert, delay=delay)
+                    row=row, col=col, invert=invert, delay=delay, protocol="alpha")
     print("  ✓ sent\n")
 
 
@@ -131,7 +132,8 @@ def cmd_font_showcase(board: DisplayBoard, proto: GraphProtocol):
         height = GraphProtocol.FONT_DIMENSIONS.get(fid, (15, 10))[0]
         label = f"F{fid}: {text}"
         print(f"  → font {fid} ({desc})  y={y_cursor}")
-        board.send_text(label, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
+        board.send_text(label, reset=False, font=fid,
+                        x=0, y=y_cursor, delay=delay)
         y_cursor += height + 1  # +1 px gap
 
     print("  ✓ all fonts sent\n")
@@ -185,10 +187,12 @@ def cmd_narrow_test(board: DisplayBoard, proto: GraphProtocol):
         h, w = GraphProtocol.FONT_DIMENSIONS.get(fid, (15, 10))
         # row 1: narrow chars, row 2: wide chars for comparison
         print(f"  → font {fid} ({desc})  y={y_cursor}  narrow")
-        board.send_text(sample, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
+        board.send_text(sample, reset=False, font=fid,
+                        x=0, y=y_cursor, delay=delay)
         y_cursor += h + 1
         print(f"  → font {fid} ({desc})  y={y_cursor}  wide")
-        board.send_text(ref, reset=False, font=fid, x=0, y=y_cursor, delay=delay)
+        board.send_text(ref, reset=False, font=fid,
+                        x=0, y=y_cursor, delay=delay)
         y_cursor += h + 1
 
     print("  ✓ narrow test sent\n")
@@ -205,8 +209,10 @@ def cmd_scrolling_text(board: DisplayBoard, proto: GraphProtocol):
     speed_delay = _ask_int("Delay/speed (ms)", 3)
     delay_update = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
-    print(f"\n  → Sending scrolling text \"{text[:20]}...\" font={font} x={x} y={y} delay_update={delay_update}")
-    packet = proto.write_scrolling_string(
+    print(
+        f"\n  → Sending scrolling text \"{text[:20]}...\" font={font} x={x} y={y} delay_update={delay_update}")
+    board.send_command(
+        "write_scrolling_string",
         text=text,
         width=width,
         scroll_delay=speed_delay,
@@ -214,9 +220,6 @@ def cmd_scrolling_text(board: DisplayBoard, proto: GraphProtocol):
         x=x, y=y, font=font,
         delay=delay_update
     )
-
-    with board.connection() as client:
-        client.send(packet)
     print("  ✓ sent\n")
 
 
@@ -229,10 +232,19 @@ def cmd_reset_area(board: DisplayBoard, proto: GraphProtocol):
     delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
 
     print(f"\n  → Sending area reset x={x} y={y} w={w} h={h} delay={delay}")
-    packet = proto.reset_area(x=x, y=y, width=w, height=h, delay=delay)
-    with board.connection() as client:
-        client.send(packet)
+    board.send_command("reset_area", x=x, y=y, width=w, height=h, delay=delay)
     print("  ✓ area reset\n")
+
+
+def cmd_stop_object(board: DisplayBoard, _proto: GraphProtocol):
+    """Deactivate an active object at specific coordinates."""
+    x = _ask_int("X (px)", 0)
+    y = _ask_int("Y (px)", 0)
+    delay = _ask_str("Delay update? (y/n)", "n").lower().startswith("y")
+
+    print(f"\n  → Sending stop object command for x={x} y={y} delay={delay}")
+    board.stop_graphic_object(x=x, y=y, delay=delay)
+    print("  ✓ object deactivated\n")
 
 
 MENU = [
@@ -244,6 +256,7 @@ MENU = [
     ("Multi-line fill", cmd_multiline),
     ("Reset full board", cmd_reset),
     ("Reset specific area", cmd_reset_area),
+    ("Stop active object", cmd_stop_object),
 ]
 
 
@@ -266,12 +279,16 @@ def main():
 
     proto = GraphProtocol(default_font=args.font, width=cfg_w, height=cfg_h)
     board = DisplayBoard(
-        ip=args.ip, 
-        port=args.port, 
-        protocol=proto,
+        ip=args.ip,
+        port=args.port,
         board_width=cfg_w,
-        board_height=cfg_h
+        board_height=cfg_h,
+        default_protocol="graph"
     )
+    # Ensure the protocol used in the tests matches the requested font
+    board.athlete_font = args.font
+    # Get the protocol instance for command-specific arguments (like width/height)
+    proto = board._get_protocol("graph")
 
     print(f"\n  Display: {args.ip}:{args.port}  |  Default font: {args.font}")
     print("  ─────────────────────────────────────────────")

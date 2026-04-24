@@ -100,10 +100,10 @@ If no valid file is found, the app exits with an error.
         - `Format`: `Default JSON`
         - `Information`: `Passaggi recenti`
  5. Make sure the display board is correctly connected to the LAN with known IP address and port, and update the `config.json` file accordingly.
- Usually, the port is `21967` for the Microtab Led Display, but remember to check.
+ Usually, the port is `21967` for the Microtab Led Display (IP `192.168.0.126` in the example config), but remember to check.
  6. Edit the `config.json` file to set the right IP address and port for the Microgate display and the Wiclax server connection settings.
- The IP to connect to Wiclax is the IP address of the machine where Wiclax is running, and the port is the one configured in the Exporter settings in Wiclax (e.g. `1234`).
- 7. Edit the `config.json` changing the `display` settings parameters to your needs such as time thresholds for cycling through the athletes when several of them pass through the checkpoint at the same time, and the rendering settings for the display.
+ The IP to connect to Wiclax is the IP address of the machine where Wiclax is running (e.g. `192.168.1.46`), and the port is the one configured in the Exporter settings in Wiclax (e.g. `1234`).
+ 7. Edit the `config.json` changing the `pagination` settings parameters to your needs such as `max_age_seconds` and `refresh_rate_seconds` for cycling through the athletes when several of them pass through the checkpoint at the same time, and the rendering settings for the display.
  8. Launch the utility and enjoy the show! `lap-counter` if installed as a package
 
 
@@ -140,30 +140,30 @@ Required fields in Wiclax:
 The system determines the layout of your display by balancing the **physical hardware** (number of boards) against your **font selection**.
 
 ### 1. Font Selection
-The `font` setting dictates the density of information on the screen:
+The `font_size` setting in the `pagination` block dictates the density of information on the screen:
 
-* **Large Font (`0` or `2`):** Best for high visibility. Each physical board displays exactly **one** logical row of data.
-* **Small Font (`1`):** Best for information density. The system maximizes the number of logical rows that can fit across your total physical height.
+* **Large Font (`2` or `"large"`):** Best for high visibility (15x14 pixels).
+* **Small Font (`1` or `"small"`):** Best for information density (9x7 pixels).
 
 ---
 
 ### 2. Logical Row Calculation
-The number of logical rows is automatically calculated based on your `n_rows` (physical boards) and the selected font.
+The number of logical rows is automatically calculated based on your physical `height` (defined in `hardware.board_dimension`) and the selected font height. The system also uses **2 columns** to maximize screen real estate.
 
-| Font Type | `default_font` | Calculation Logic |
-| :--- | :--- | :--- |
-| **Large** | `0` or `2` | $\text{Logical Rows} = n\_rows$ |
-| **Small** | `1` | $\text{Logical Rows} = \frac{(n\_rows \times 17) - 1}{9}$ (rounded for even spacing) |
+| Font Type | `font_size` | Height | Calculation Logic |
+| :--- | :--- | :--- | :--- |
+| **Large** | `2` / `"large"` | 15px | $\text{Logical Rows} = \text{total\_height} // 16$ |
+| **Small** | `1` / `"small"` | 9px | $\text{Logical Rows} = \text{total\_height} // 10$ |
 
-> **Example:** If you have **2 physical boards** and use the **Small Font**, the system will automatically generate **3 logical rows**.
+> **Example:** If you have a **32px high display** and use the **Small Font**, the system will generate **3 logical rows**. With 2 columns, this allows for **6 simultaneous slots**.
 
 ---
 
 ### 3. Pagination & Scrolling
-To manage how data transitions across the screen, use the pagination offset:
+To manage how data transitions across the screen, use the pagination step:
 
-* **`offset_pagination`**: Defines the "jump" size. 
-    * *Example:* If set to `2`, the display will skip 2 athletes when scrolling to the next page, ensuring a consistent flow of information without overlapping too much previous data.
+* **`step`**: Defines the "jump" size when scrolling. 
+    * *Example:* If set to `1`, the display will skip 1 athlete when scrolling to the next page. If you have many athletes, increasing this value (e.g., to `2`) will speed up the rotation.
 
 # Available `id` transformations in Wiclax
 It is possible to apply some transformations to the `id` field in Wiclax, so that the utility can display different information on the board.
@@ -173,6 +173,9 @@ Available transformations are:
 - `pad_bib_space_3`
 - `pad_bib_zero_4`
 - `pad_bib_zero_3`
+- `trim_7`
+- `trim_6`
+- `trim_5`
 - `trim_4`
 - `trim_3`
 - `to_lower`

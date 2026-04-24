@@ -196,16 +196,7 @@ class GraphProtocol(DisplayProtocol):
                 final_x = 0
 
         if final_y is None:
-            row = kwargs.get('row', 'A')
-            try:
-                if isinstance(row, str) and len(row) == 1 and row.isalpha():
-                    # Map "A" -> 0, "B" -> 1, etc.
-                    row_idx = ord(row.upper()) - ord('A')
-                else:
-                    row_idx = int(row)
-                final_y = row_idx * height
-            except (ValueError, TypeError):
-                final_y = 0
+            final_y = 0
 
         packet = self._build_header('S', final_x, final_y, bo, f, delay=delay)
 
@@ -312,7 +303,7 @@ class GraphProtocol(DisplayProtocol):
 
         return self._finalize_packet(packet)
 
-    def deactivate_active_object(self, x: int, y: int, delay: bool = False) -> bytes:
+    def stop_graphic_object(self, x: int, y: int, delay: bool = False) -> bytes:
         """
         Deactivating an active object ('t')
         """

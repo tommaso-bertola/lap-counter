@@ -12,6 +12,8 @@ class AthleteResult:
         # Pre-calculate fields for O(1) lookup
         self.fields = {str(a.get('field')): str(a.get('text', ''))
                        for a in actions if 'field' in a}
+        if actions:
+            self.fields['athlete_name'] = actions[0].get('athlete_name', '')
         self.arrival_time = time.time()
 
     def __repr__(self):
@@ -258,6 +260,7 @@ class PaginationManager:
                             bin_op=self.invert_background,
                             delay=True)
 
+                        name1 = get_field_text(ath1, 'athlete_name')
                         self.board.send_text(
                             bib1,
                             x=self.font_x_dimension + self.spacing_between_status_and_bib_leds,
@@ -265,12 +268,22 @@ class PaginationManager:
                             font=self.board.athlete_font,
                             reset=False,
                             client=client,
-                            delay=True)
+                            delay=True,
+                            log_suffix=f" ({name1})" if name1 else "")
 
                     # 2. Second column
                     if ath2:
                         status2 = get_field_text(ath2, "msg")
                         bib2 = get_field_text(ath2, "id")
+
+                        self.board.send_command(
+                            "reset_area",
+                            self.mid_point - 4,
+                            y_offset,
+                            self.total_width - (self.mid_point - 4),
+                            self.font_y_dimension + 2,
+                            client=client,
+                            delay=True)
 
                         self.board.send_text(
                             status2,
@@ -282,6 +295,7 @@ class PaginationManager:
                             bin_op=self.invert_background,
                             delay=True)
 
+                        name2 = get_field_text(ath2, 'athlete_name')
                         self.board.send_text(
                             bib2,
                             x=self.mid_point + self.font_x_dimension +
@@ -290,7 +304,8 @@ class PaginationManager:
                             font=self.board.athlete_font,
                             reset=False,
                             client=client,
-                            delay=True)
+                            delay=True,
+                            log_suffix=f" ({name2})" if name2 else "")
 
                 # Final empty send with delay=False to trigger the board refresh
                 self.board.send_text(

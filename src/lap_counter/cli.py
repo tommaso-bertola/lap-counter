@@ -8,10 +8,8 @@ import time
 from pathlib import Path
 from lap_counter.network.client import TCPClient
 from lap_counter.parsing.json_stream import JSONStreamParser
-from lap_counter.storage.disk import MessageStore
 from lap_counter.display.board import DisplayBoard
 from lap_counter.display.config_handler import DisplayConfigHandler
-from lap_counter.display.protocols import GraphProtocol
 from lap_counter.display.pagination import PaginationManager
 
 # Connection defaults
@@ -106,23 +104,18 @@ def main():
     font_size = os.environ.get(
         "DISPLAY_FONT_SIZE", pag_cfg.get("font_size", 1))
 
-    protocol = GraphProtocol(
-        default_font=font_size,
-        width=board_dim.get("width", 96),
-        height=board_dim.get("height", 16)
-    )
-
     parser = JSONStreamParser()
-    store = MessageStore(directory="output")
     display_board = DisplayBoard(
-        ip=DISPLAY_IP, 
-        port=DISPLAY_PORT, 
-        protocol=protocol,
+        ip=DISPLAY_IP,
+        port=DISPLAY_PORT,
         board_width=board_dim.get("width", 128),
         board_height=board_dim.get("height", 32),
         n_vertical=board_dim.get("n_vertical_boards", 1),
-        n_horizontal=board_dim.get("n_horizonal_boards", 1)
+        n_horizontal=board_dim.get("n_horizonal_boards", 1),
+        default_protocol="graph"
     )
+    # Set the athlete font on the board so it can be used for protocol lazy-init
+    display_board.athlete_font = 2 if font_size == "large" or font_size == 2 else 1
     display_manager = PaginationManager(
         display_board, config={
             "pagination": pag_cfg,
@@ -153,7 +146,7 @@ def main():
 
                             if not is_in_race:
                                 for action in display_actions:
-                                    logging.info(
+                                    logging.debug(
                                         f"Queueing to DisplayManager: {action}")
                             try:
                                 display_manager.show_message(display_actions)
@@ -165,14 +158,12 @@ def main():
                                 "Received data (no display rules applied):")
                             pprint.pprint(obj)
 
-                        # Store message on disk
-                        if config_handler.should_save_to_disk(data_type):
-                            store.save_message(obj)
-
                         # Feedback sound and separator (suppressed for "inRace")
-                        if not is_in_race:
+                        if not is_in_race and config_handler.sound_notification:
                             play_sound()
-                            logging.info("-" * 20)
+
+                        if not is_in_race:
+                            logging.debug("-" * 20)
 
         except KeyboardInterrupt:
             logging.info("\nMain listener stopped by user.")

@@ -24,6 +24,11 @@ class DisplayConfigHandler:
             return {}
 
     @property
+    def sound_notification(self) -> bool:
+        """Returns True if sound notifications are enabled."""
+        return self.config.get("sound_notification", True)
+
+    @property
     def source_config(self) -> Dict[str, Any]:
         """Returns the source network configuration."""
         return self.config.get("source", {}).get("connection", {"host": "127.0.0.1", "port": 1234})
@@ -42,12 +47,6 @@ class DisplayConfigHandler:
     def hardware_config(self) -> Dict[str, Any]:
         """Returns the hardware/display connection configuration."""
         return self.config.get("hardware", {}).get("connection", {"ip": "127.0.0.1", "port": 4422})
-
-    def should_save_to_disk(self, data_type: str) -> bool:
-        """Returns True if the message should be saved to disk based on its type."""
-        type_cfg = self.config.get("processing", {}).get(
-            "rules", {}).get(data_type, {})
-        return type_cfg.get("storage", {}).get("save_to_disk", True)
 
     def should_process_for_display(self, message: Dict[str, Any]) -> bool:
         """Returns True if the message should be processed for display based on its type and filter."""
@@ -103,7 +102,8 @@ class DisplayConfigHandler:
             actions.append({
                 "text": value,
                 "field": field_name,
-                "bib": bib_number
+                "bib": bib_number,
+                "athlete_name": "#"+str(bib_number)+" "+message.get("lastname", "").upper() + " " + message.get("firstname", "").capitalize()
             })
 
         return actions

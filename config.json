@@ -1,4 +1,5 @@
 {
+  "sound_notification": true,
   "source": {
     "connection": {
       "host": "192.168.1.46",
@@ -30,9 +31,6 @@
   "processing": {
     "rules": {
       "passing": {
-        "storage": {
-          "save_to_disk": false
-        },
         "display": {
           "enabled": true,
           "filter": {
@@ -58,9 +56,6 @@
         ]
       },
       "inRace": {
-        "storage": {
-          "save_to_disk": false
-        },
         "display": {
           "enabled": false
         }
